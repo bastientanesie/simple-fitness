@@ -13,7 +13,9 @@ export function useTheme() {
     if (pref.value === 'light') {
       el.classList.add('light')
     } else if (pref.value === 'dark') {
-      el.classList.add('dark')
+      // dark is the CSS default (:root), no class needed
+    } else if (!prefersDark.value) {
+      el.classList.add('light')
     }
   })
 
