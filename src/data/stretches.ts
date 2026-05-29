@@ -1,14 +1,25 @@
-export interface Stretch {
-  id: string
-  name: string
-  emoji: string
-  tc: string
-  duration: number | null
-  sides: boolean
-  reps?: number
-  pos: string
-  cue: string
-}
+export type Stretch =
+  | {
+      id: string
+      name: string
+      emoji: string
+      tc: string
+      sides: boolean
+      pos: string
+      cue: string
+      duration: number
+    }
+  | {
+      id: string
+      name: string
+      emoji: string
+      tc: string
+      sides: boolean
+      pos: string
+      cue: string
+      duration: null
+      reps: number
+    }
 
 export const stretches: Stretch[] = [
   {

@@ -17,7 +17,7 @@ defineEmits<{ next: [] }>()
     <Dots :current="exerciseIndex" :total="sessionLength" />
     <div style="font-size: 64px;">{{ exercise.emoji }}</div>
     <div style="font-family: 'Syne', sans-serif; font-weight: 800; font-size: 26px; color: #22c55e;">Exercice terminé !</div>
-    <div style="font-size: 12px; color: var(--muted);">{{ exercise.sets }} séries · {{ exercise.reps }}</div>
+    <div style="font-size: 12px; color: var(--muted);">{{ exercise.sets }} séries · {{ exercise.reps ?? `${exercise.duration} s` }}</div>
     <div style="width: 100%; margin-top: 8px;">
       <button
         v-if="nextExercise"
