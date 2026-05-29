@@ -182,7 +182,7 @@ export function useSession() {
   })
 
   // ── Handlers ─────────────────────────────────────────────────────────────
-  function handleCommencer() {
+  function handleBegin() {
     lastSessionIds.value = session.value.map(e => e.id)
     acquireWakeLock('screen')
     startTime = Date.now()
@@ -304,7 +304,7 @@ export function useSession() {
     exTimer,
     restTimer,
     stretchTimer,
-    handleCommencer,
+    handleBegin,
     handleStart,
     handleOk,
     handleSkipRest,
