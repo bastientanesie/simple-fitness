@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { watch } from 'vue'
 import { useSession } from '../composables/useSession'
 import { exercises } from '../data/exercises'
 import { stretches } from '../data/stretches'
@@ -13,6 +14,8 @@ import StretchScreen      from '../components/screens/StretchScreen.vue'
 import DoneScreen         from '../components/screens/DoneScreen.vue'
 
 const s = useSession()
+
+watch(s.screen, () => window.scrollTo(0, 0))
 </script>
 
 <template>
