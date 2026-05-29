@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Séance renforcement</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; }
+    body { -webkit-tap-highlight-color: transparent; background: var(--bg); }
+
+    :root {
+      --bg:             #080808;
+      --surface:        #111111;
+      --border:         #1a1a1a;
+      --fg:             #e5e5e5;
+      --fg2:            #aaaaaa;
+      --muted:          #555555;
+      --subtle:         #282828;
+      --warmup-bg:      #100d00;
+      --warmup-border:  rgba(240,165,0,0.13);
+      --stretch-bg:     #081008;
+      --stretch-border: rgba(52,211,153,0.12);
+      --ex-bg:          #181818;
+      --ghost-border:   #1e1e1e;
+      --ring-track:     #1a1a1a;
+      --toggle-bg:      #141414;
+      --toggle-border:  #282828;
+      --toggle-fg:      #666666;
+    }
+    html.light {
+      --bg:             #f2f1ed;
+      --surface:        #ffffff;
+      --border:         #e0dfd8;
+      --fg:             #1a1a1a;
+      --fg2:            #444444;
+      --muted:          #888888;
+      --subtle:         #d0cfca;
+      --warmup-bg:      #fefbf0;
+      --warmup-border:  rgba(180,120,0,0.15);
+      --stretch-bg:     #f0faf4;
+      --stretch-border: rgba(22,163,74,0.15);
+      --ex-bg:          #f5f4f0;
+      --ghost-border:   #d5d4ce;
+      --ring-track:     #e0dfd8;
+      --toggle-bg:      #ffffff;
+      --toggle-border:  #e0dfd8;
+      --toggle-fg:      #888888;
+    }
+
+    @keyframes pop    { 0%{transform:scale(1.4);opacity:0} 100%{transform:scale(1);opacity:1} }
+    @keyframes fin    { 0%{opacity:0;transform:translateY(10px)} 100%{opacity:1;transform:translateY(0)} }
+    @keyframes sideIn { 0%{opacity:0;transform:translateX(24px)} 100%{opacity:1;transform:translateX(0)} }
+    .pop    { animation: pop    0.3s cubic-bezier(.175,.885,.32,1.275) both; }
+    .fin    { animation: fin    0.3s ease-out both; }
+    .sideIn { animation: sideIn 0.25s ease-out both; }
+    button { transition: opacity 0.15s, transform 0.1s; -webkit-appearance: none; }
+    button:active { opacity: 0.8; transform: scale(0.98); }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { useState, useEffect, useRef } = React;
+
+  // ── Audio ─────────────────────────────────────────────────────────────────
+  let _ac = null;
+  const getAc = () => {
+    try { if (!_ac) _ac = new (window.AudioContext || window.webkitAudioContext)(); return _ac; } catch(e) { return null; }
+  };
+  const tone = (f, d, v=0.3, dt=0) => {
+    const ctx = getAc(); if (!ctx) return;
+    try {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = "sine"; o.frequency.value = f;
+      g.gain.setValueAtTime(v, ctx.currentTime + dt);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dt + d);
+      o.start(ctx.currentTime + dt); o.stop(ctx.currentTime + dt + d);
+    } catch(e) {}
+  };
+  const sfx = {
+    tick:   () => tone(660, 0.07, 0.3),
+    go:     () => { tone(880,0.1,0.4,0); tone(880,0.1,0.35,0.12); tone(1100,0.2,0.45,0.25); },
+    next:   () => { tone(880,0.12,0.4,0); tone(1100,0.2,0.4,0.15); },
+    exdone: () => { tone(550,0.1,0.3,0); tone(660,0.1,0.3,0.12); tone(880,0.25,0.4,0.26); },
+    side:   () => { tone(770,0.1,0.3,0); tone(990,0.15,0.35,0.12); },
+    done:   () => [0,0.2,0.42,0.66].forEach((dt,i) => tone([660,880,1100,1320][i], 0.25, 0.4, dt)),
+  };
+
+  // ── Exercise pool ─────────────────────────────────────────────────────────
+  // cat: legs | back | core | shoulders
+  // timed: false = reps, true = durée fixe (duration en secondes)
+  const POOL = [
+    // JAMBES / GENOUX
+    { id:'squat',   cat:'legs',      name:"Squat",           emoji:"🦵", tc:"#60a5fa", target:"Jambes · Genoux",
+      sets:3, reps:"12 reps",        restSeconds:45, gear:null,      timed:false,
+      pos:"Debout, pieds écartés largeur épaules, orteils légèrement vers l'extérieur",
+      cue:"Descends comme pour t'asseoir sur une chaise. Genoux dans l'axe des orteils. Dos droit, regard devant. Remonte en poussant dans les talons." },
+
+    { id:'lunge',   cat:'legs',      name:"Fente avant",     emoji:"🚶", tc:"#60a5fa", target:"Jambes · Genoux",
+      sets:3, reps:"10 reps / côté", restSeconds:45, gear:null,      timed:false,
+      pos:"Debout, pieds joints",
+      cue:"Grand pas en avant, descends le genou arrière vers le sol sans le toucher. Genou avant dans l'axe du pied, pas au-delà des orteils. Repousse pour revenir." },
+
+    { id:'wallsit', cat:'legs',      name:"Chaise",          emoji:"🪑", tc:"#60a5fa", target:"Jambes · Genoux",
+      sets:3, reps:"30 s",           restSeconds:45, gear:null,      timed:true, duration:30,
+      pos:"Dos contre le mur, pieds à 60 cm du mur, genoux à 90°",
+      cue:"Dos bien plaqué contre le mur, cuisses parallèles au sol. Respire normalement. Si 30s devient confortable après quelques séances, vise 45s." },
+
+    { id:'glute',   cat:'legs',      name:"Pont fessier",    emoji:"🌉", tc:"#60a5fa", target:"Genoux · Fessiers",
+      sets:3, reps:"10 reps",        restSeconds:45, gear:null,      timed:false,
+      pos:"Sur le dos — genoux fléchis à 90°, pieds à plat au sol",
+      cue:"Soulève le bassin jusqu'à une ligne droite épaules → genoux. Tiens 2s en haut. Redescends lentement." },
+
+    { id:'clam',    cat:'legs',      name:"Clamshell",       emoji:"🦪", tc:"#60a5fa", target:"Genoux · Hanches",
+      sets:2, reps:"12 reps / côté", restSeconds:45, gear:"élastique", timed:false,
+      pos:"Couché sur le côté — élastique au-dessus des genoux, hanches fléchies ~45°, genoux pliés",
+      cue:"Ouvre le genou du dessus vers le plafond comme une moule. Pieds collés. Résiste à l'élastique à la fermeture — ne laisse pas claquer. N'oublie pas les 2 côtés." },
+
+    // DOS
+    { id:'catcow',  cat:'back',      name:"Cat-Cow",         emoji:"🐈", tc:"#4ade80", target:"Dos",
+      sets:2, reps:"10 reps",        restSeconds:30, gear:null,      timed:false,
+      pos:"À 4 pattes — poignets sous épaules, genoux sous hanches",
+      cue:"Inspiration : creuse le dos, ventre vers le sol, tête qui se lève. Expiration : arrondis le dos vers le plafond, tête qui tombe. Lent, guidé par la respiration." },
+
+    { id:'birddog', cat:'back',      name:"Bird-Dog",        emoji:"🦅", tc:"#4ade80", target:"Dos · Gainage",
+      sets:3, reps:"8 reps / côté",  restSeconds:45, gear:null,      timed:false,
+      pos:"À 4 pattes — même position que le cat-cow",
+      cue:"Tends le bras droit et la jambe gauche simultanément, horizontaux. Tiens 2-3s, reviens, change de côté. Dos plat, pas de rotation du bassin. Le plus technique — prends le temps de bien te placer." },
+
+    { id:'superman',cat:'back',      name:"Superman",        emoji:"🦸", tc:"#4ade80", target:"Dos · Lombaires",
+      sets:3, reps:"10 reps",        restSeconds:45, gear:null,      timed:false,
+      pos:"Allongé sur le ventre, bras tendus devant toi",
+      cue:"Soulève simultanément bras et jambes du sol, tiens 2s, redescends lentement. Regard vers le sol, pas de tension dans la nuque." },
+
+    // GAINAGE
+    { id:'plank',   cat:'core',      name:"Planche",         emoji:"🏋️", tc:"#a78bfa", target:"Gainage",
+      sets:3, reps:"20 s",           restSeconds:45, gear:null,      timed:true, duration:20,
+      pos:"Avant-bras au sol, corps en ligne droite des épaules aux talons",
+      cue:"Contracte le ventre et les fessiers. Ne laisse pas le bassin monter ou descendre. Respire. Si 20s devient confortable, vise 30s." },
+
+    { id:'deadbug', cat:'core',      name:"Dead Bug",        emoji:"🐛", tc:"#a78bfa", target:"Gainage · Dos",
+      sets:3, reps:"8 reps / côté",  restSeconds:45, gear:null,      timed:false,
+      pos:"Sur le dos, bras tendus vers le plafond, genoux fléchis à 90° en l'air",
+      cue:"Descends simultanément le bras droit et la jambe gauche vers le sol sans les poser. Dos plaqué au sol. Reviens, change de côté. Lent et contrôlé." },
+
+    // ÉPAULES / POSTURE
+    { id:'pullap',  cat:'shoulders', name:"Band Pull-Apart", emoji:"💪", tc:"#f472b6", target:"Épaules · Posture",
+      sets:2, reps:"12 reps",        restSeconds:30, gear:"élastique", timed:false,
+      pos:"Debout — élastique à hauteur de poitrine, bras tendus devant toi",
+      cue:"Écarte les bras latéralement jusqu'à ce que l'élastique touche ta poitrine. Contrôle le retour — pas de relâchement brutal. Omoplates qui se rapprochent dans le dos." },
+
+    { id:'wallang', cat:'shoulders', name:"Wall Angel",      emoji:"😇", tc:"#f472b6", target:"Épaules · Mobilité",
+      sets:2, reps:"10 reps",        restSeconds:30, gear:null,      timed:false,
+      pos:"Dos contre le mur, bras fléchis à 90° (position « mains en l'air »), coudes et poignets contre le mur",
+      cue:"Fais glisser les bras vers le haut pour former un W puis un Y, en gardant contact avec le mur. Lent. Si les poignets décollent, ne force pas — c'est normal au début." },
+  ];
+
+  const CAT_LABELS = { legs:'Jambes', back:'Dos', core:'Gainage', shoulders:'Épaules' };
+
+  // ── Session builder ───────────────────────────────────────────────────────
+  function shuffle(arr) { return [...arr].sort(() => Math.random() - 0.5); }
+
+  function buildSession() {
+    let lastIds = [];
+    try { lastIds = JSON.parse(localStorage.getItem('last-session-ids') || '[]'); } catch(e) {}
+
+    const pickFrom = (pool, n) => {
+      const fresh = pool.filter(e => !lastIds.includes(e.id));
+      return shuffle(fresh.length >= n ? fresh : pool).slice(0, n);
+    };
+
+    const legs      = pickFrom(POOL.filter(e => e.cat === 'legs'),      2);
+    const back      = pickFrom(POOL.filter(e => e.cat === 'back'),      1);
+    const core      = pickFrom(POOL.filter(e => e.cat === 'core'),      1);
+    const shoulders = pickFrom(POOL.filter(e => e.cat === 'shoulders'), 1);
+
+    return shuffle([...legs, ...back, ...core, ...shoulders]);
+  }
+
+  function saveSession(session) {
+    try { localStorage.setItem('last-session-ids', JSON.stringify(session.map(e => e.id))); } catch(e) {}
+  }
+
+  // ── Stretches ─────────────────────────────────────────────────────────────
+  const STRETCHES = [
+    { id:1, name:"Posture enfant",         emoji:"🧘", tc:"#4ade80", duration:40, sides:false,
+      pos:"À genoux, assis sur les talons, bras étirés devant toi sur le sol, front posé",
+      cue:"Laisse le dos s'allonger naturellement. Respiration profonde et lente. Relâche les épaules complètement à chaque expiration." },
+    { id:2, name:"Ischio-jambiers couché", emoji:"🦵", tc:"#60a5fa", duration:30, sides:true,
+      pos:"Sur le dos — une jambe tendue vers le plafond, mains derrière la cuisse",
+      cue:"Tire doucement la jambe vers toi sans plier le genou. Tu dois sentir l'arrière de la cuisse. L'autre jambe reste à plat au sol. Pas de douleur, juste une tension douce." },
+    { id:3, name:"Piriforme",              emoji:"🔄", tc:"#a78bfa", duration:30, sides:true,
+      pos:"Sur le dos — cheville d'une jambe posée sur le genou opposé",
+      cue:"Tire la jambe du dessous vers ta poitrine. Tu dois sentir l'étirement profond dans la fesse. Respire et relâche à chaque expiration." },
+    { id:4, name:"Ouverture pectorale",    emoji:"🤸", tc:"#f472b6", duration:30, sides:true,
+      pos:"Au sol sur le côté — bras supérieur tendu vers le plafond, puis laisse-le tomber derrière toi",
+      cue:"Laisse l'épaule et la poitrine s'ouvrir vers l'arrière sous le poids du bras. Hanches stables. Respiration lente." },
+    { id:5, name:"Cat-cow lent",           emoji:"🐈", tc:"#fbbf24", duration:null, sides:false, reps:8,
+      pos:"À 4 pattes — poignets sous épaules, genoux sous hanches",
+      cue:"8 répétitions très lentes, guidées par la respiration. C'est la clôture de la séance — prends ton temps, ressens chaque vertèbre." },
+  ];
+
+  // ── Theme hook ────────────────────────────────────────────────────────────
+  function useTheme() {
+    const [mode, setMode] = useState(() => { try { return localStorage.getItem('theme-pref') || 'system'; } catch(e) { return 'system'; } });
+    const apply = (m) => {
+      const dark = m === 'system' ? window.matchMedia('(prefers-color-scheme: dark)').matches : m === 'dark';
+      document.documentElement.classList.toggle('light', !dark);
+    };
+    useEffect(() => {
+      apply(mode);
+      try { localStorage.setItem('theme-pref', mode); } catch(e) {}
+      if (mode === 'system') {
+        const mq = window.matchMedia('(prefers-color-scheme: dark)');
+        const h = () => apply('system');
+        mq.addEventListener('change', h);
+        return () => mq.removeEventListener('change', h);
+      }
+    }, [mode]);
+    const cycle = () => setMode(m => m === 'system' ? 'light' : m === 'light' ? 'dark' : 'system');
+    return { cycle, label: { system:'⚙ auto', light:'☀ clair', dark:'☾ sombre' }[mode] };
+  }
+
+  // ── Wake Lock hook ────────────────────────────────────────────────────────
+  function useWakeLock() {
+    const lockRef = useRef(null), wantedRef = useRef(false);
+    const doAcquire = async () => {
+      if (!('wakeLock' in navigator)) return;
+      try {
+        lockRef.current = await navigator.wakeLock.request('screen');
+        lockRef.current.addEventListener('release', () => { lockRef.current = null; });
+      } catch(e) {}
+    };
+    const acquire = () => { wantedRef.current = true; doAcquire(); };
+    const release = async () => {
+      wantedRef.current = false;
+      try { if (lockRef.current) { await lockRef.current.release(); lockRef.current = null; } } catch(e) {}
+    };
+    useEffect(() => {
+      const h = () => { if (document.visibilityState === 'visible' && wantedRef.current && !lockRef.current) doAcquire(); };
+      document.addEventListener('visibilitychange', h);
+      return () => document.removeEventListener('visibilitychange', h);
+    }, []);
+    return { acquire, release };
+  }
+
+  // ── Ring ──────────────────────────────────────────────────────────────────
+  function Ring({ val, max, color, size=160 }) {
+    const sw=10, r=(size-sw)/2, c=2*Math.PI*r;
+    const pct = max > 0 ? Math.max(0, val) / max : 0;
+    return (
+      <svg width={size} height={size} style={{ transform:"rotate(-90deg)" }}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--ring-track)" strokeWidth={sw} />
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={sw}
+          strokeDasharray={c} strokeDashoffset={c*(1-pct)} strokeLinecap="round"
+          style={{ transition:"stroke-dashoffset 1s linear" }} />
+      </svg>
+    );
+  }
+
+  // ── Dots ──────────────────────────────────────────────────────────────────
+  function Dots({ cur, n, doneColor="#22c55e", activeColor="#f0a500" }) {
+    return (
+      <div style={{ display:"flex", gap:5, justifyContent:"center" }}>
+        {Array.from({ length:n }, (_,i) => (
+          <div key={i} style={{ width:i===cur?20:7, height:7, borderRadius:4, transition:"all 0.3s",
+            background: i<cur ? doneColor : i===cur ? activeColor : "var(--border)" }} />
+        ))}
+      </div>
+    );
+  }
+
+  // ── App ───────────────────────────────────────────────────────────────────
+  function App() {
+    const [screen,       setScreen]       = useState("home");
+    const [session,      setSession]      = useState(() => buildSession());
+    const [ei,           setEi]           = useState(0);
+    const [set,          setSet]          = useState(1);
+    const [cd,           setCd]           = useState(1);
+    const [rest,         setRest]         = useState(0);
+    const [restMax,      setRestMax]      = useState(0);
+    // Timed exercise countdown
+    const [exTimer,      setExTimer]      = useState(0);
+    const [exTimerMax,   setExTimerMax]   = useState(0);
+    const [exTimerRun,   setExTimerRun]   = useState(false);
+    // Stretching
+    const [si,           setSi]           = useState(0);
+    const [sTimer,       setSTimer]       = useState(0);
+    const [sMax,         setSMax]         = useState(0);
+    const [sSide,        setSSide]        = useState(0);
+    const [sRunning,     setSRunning]     = useState(false);
+    // Time tracking
+    const startTimeRef = useRef(null);
+    const [elapsed,      setElapsed]      = useState("");
+
+    const { cycle, label } = useTheme();
+    const wl = useWakeLock();
+
+    const ex = session[Math.min(ei, session.length - 1)] || session[0];
+    const st = STRETCHES[Math.min(si, STRETCHES.length - 1)];
+
+    // ── Countdown 1→2→3→GO! ───────────────────────────────────────────────
+    useEffect(() => {
+      if (screen !== "countdown") return;
+      if (cd <= 3) { sfx.tick(); const t = setTimeout(() => setCd(v=>v+1), 800); return () => clearTimeout(t); }
+      sfx.go();
+      const t = setTimeout(() => setScreen("active"), 650);
+      return () => clearTimeout(t);
+    }, [screen, cd]);
+
+    // ── Start ex timer on active screen (timed exercises) ─────────────────
+    useEffect(() => {
+      if (screen !== "active" || !ex?.timed) return;
+      setExTimer(ex.duration);
+      setExTimerMax(ex.duration);
+      setExTimerRun(true);
+    }, [screen, ei, set]);
+
+    // ── Ex timer tick ─────────────────────────────────────────────────────
+    useEffect(() => {
+      if (screen !== "active" || !exTimerRun) return;
+      if (exTimer <= 0) {
+        setExTimerRun(false);
+        if (set < ex.sets) { sfx.next(); setRestMax(ex.restSeconds); setRest(ex.restSeconds); setScreen("rest"); }
+        else { sfx.exdone(); setScreen("exdone"); }
+        return;
+      }
+      const t = setTimeout(() => setExTimer(v=>v-1), 1000);
+      return () => clearTimeout(t);
+    }, [screen, exTimerRun, exTimer, set, ex]);
+
+    // ── Rest timer ────────────────────────────────────────────────────────
+    useEffect(() => {
+      if (screen !== "rest") return;
+      if (rest <= 0) { sfx.next(); setSet(s=>s+1); setCd(1); setScreen("countdown"); return; }
+      const t = setTimeout(() => setRest(v=>v-1), 1000);
+      return () => clearTimeout(t);
+    }, [screen, rest]);
+
+    // ── Stretch timer ─────────────────────────────────────────────────────
+    useEffect(() => {
+      if (screen !== "stretch" || !sRunning || st.duration === null) return;
+      if (sTimer <= 0) {
+        if (st.sides && sSide === 0) {
+          sfx.side(); setSSide(1); setSTimer(st.duration); setSMax(st.duration);
+        } else {
+          sfx.exdone(); setSRunning(false);
+          if (si < STRETCHES.length - 1) {
+            setTimeout(() => { setSi(s=>s+1); setSSide(0); setSRunning(false); setScreen("stretchIntro"); }, 600);
+          } else {
+            setTimeout(() => finishSeance(), 600);
+          }
+        }
+        return;
+      }
+      const t = setTimeout(() => setSTimer(v=>v-1), 1000);
+      return () => clearTimeout(t);
+    }, [screen, sRunning, sTimer, si, sSide]);
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+    const finishSeance = () => {
+      wl.release();
+      if (startTimeRef.current) {
+        const secs = Math.round((Date.now() - startTimeRef.current) / 1000);
+        const m = Math.floor(secs / 60), s = secs % 60;
+        setElapsed(s > 0 ? `${m} min ${s < 10 ? "0"+s : s} s` : `${m} min`);
+      }
+      setScreen("done");
+    };
+
+    const handleOk = () => {
+      setExTimerRun(false);
+      if (set < ex.sets) { setRestMax(ex.restSeconds); setRest(ex.restSeconds); setScreen("rest"); }
+      else { sfx.exdone(); setScreen("exdone"); }
+    };
+    const handleSkipRest  = () => { sfx.next(); setSet(s=>s+1); setCd(1); setScreen("countdown"); };
+    const handleNext      = () => {
+      if (ei < session.length - 1) { setEi(ei+1); setSet(1); setScreen("intro"); }
+      else { sfx.exdone(); setSi(0); setSSide(0); setSRunning(false); setScreen("stretchIntro"); }
+    };
+    const handleStart     = () => { setCd(1); setScreen("countdown"); };
+    const handleCommencer = () => {
+      saveSession(session);
+      wl.acquire();
+      startTimeRef.current = Date.now();
+      setEi(0); setSet(1);
+      setScreen("intro");
+    };
+    const handleRestart   = () => {
+      const s = buildSession();
+      setSession(s); setEi(0); setSet(1); setCd(1); setRest(0);
+      setSi(0); setSSide(0); setSRunning(false); setElapsed("");
+      setScreen("home");
+    };
+    const handleRegen     = () => setSession(buildSession());
+
+    const startStretch = () => {
+      if (st.duration !== null) { setSMax(st.duration); setSTimer(st.duration); setSRunning(true); setScreen("stretch"); }
+      else setScreen("stretch");
+    };
+    const skipStretch = () => {
+      setSRunning(false);
+      if (si < STRETCHES.length - 1) { setSi(s=>s+1); setSSide(0); setScreen("stretchIntro"); }
+      else finishSeance();
+    };
+    const finishCatCow = () => {
+      sfx.exdone();
+      if (si < STRETCHES.length - 1) { setSi(s=>s+1); setSSide(0); setScreen("stretchIntro"); }
+      else finishSeance();
+    };
+
+    // ── Styles ────────────────────────────────────────────────────────────
+    const S = {
+      root:  { minHeight:"100vh", background:"var(--bg)", color:"var(--fg)", fontFamily:"'IBM Plex Mono',monospace", maxWidth:480, margin:"0 auto", display:"flex", flexDirection:"column" },
+      sy:    { fontFamily:"'Syne',sans-serif", fontWeight:800 },
+      lbl:   { fontSize:10, color:"var(--muted)", letterSpacing:"0.15em", textTransform:"uppercase" },
+      card:  { background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"14px 16px" },
+      btnP:  (bg="#22c55e", fg="#000") => ({ width:"100%", padding:"16px", background:bg, color:fg, border:"none", borderRadius:14, fontSize:15, fontWeight:700, fontFamily:"'Syne',sans-serif", cursor:"pointer", letterSpacing:"0.02em" }),
+      btnG:  { width:"100%", padding:"12px", background:"transparent", color:"var(--muted)", border:"1px solid var(--ghost-border)", borderRadius:14, fontSize:12, fontFamily:"'IBM Plex Mono',monospace", cursor:"pointer" },
+      bdg:   (tc) => ({ display:"inline-block", fontSize:10, fontWeight:600, padding:"3px 10px", borderRadius:999, background:tc+"20", color:tc, border:`1px solid ${tc}40`, letterSpacing:"0.05em", textTransform:"uppercase" }),
+      tBtn:  { background:"var(--toggle-bg)", border:"1px solid var(--toggle-border)", color:"var(--toggle-fg)", borderRadius:8, padding:"6px 10px", cursor:"pointer", fontSize:11, fontFamily:"'IBM Plex Mono',monospace", whiteSpace:"nowrap", flexShrink:0 },
+      regen: { background:"transparent", border:"1px solid var(--ghost-border)", color:"var(--muted)", borderRadius:8, padding:"5px 10px", cursor:"pointer", fontSize:11, fontFamily:"'IBM Plex Mono',monospace", flexShrink:0 },
+    };
+
+    // ── HOME ──────────────────────────────────────────────────────────────
+    if (screen === "home") return (
+      <div style={S.root}>
+        <div style={{ padding:"28px 20px 80px" }} className="fin">
+
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24 }}>
+            <div>
+              <div style={{ ...S.lbl, color:"#f0a500", marginBottom:8 }}>Mercredi · Vendredi · 12h15</div>
+              <div style={{ ...S.sy, fontSize:30, lineHeight:1.1 }}>Séance<br/><span style={{ color:"#f0a500" }}>renforcement</span></div>
+            </div>
+            <button style={S.tBtn} onClick={cycle}>{label}</button>
+          </div>
+
+          {/* Échauffement */}
+          <div style={{ ...S.card, background:"var(--warmup-bg)", border:"1px solid var(--warmup-border)", marginBottom:16, display:"flex", alignItems:"center", gap:12 }}>
+            <span style={{ fontSize:24 }}>🚴</span>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:600, fontSize:13, marginBottom:2 }}>Échauffement d'abord</div>
+              <div style={{ fontSize:11, color:"var(--muted)" }}>Vélo d'appart · résistance minimale · 5 min</div>
+            </div>
+            <span style={{ fontSize:13, color:"#f0a500", fontWeight:600 }}>↓</span>
+          </div>
+
+          {/* Session du jour */}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+            <div style={{ ...S.lbl }}>Séance du jour · {session.length} exercices</div>
+            <button style={S.regen} onClick={handleRegen} title="Générer une autre sélection">↻ changer</button>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:16 }}>
+            {session.map(e => (
+              <div key={e.id} style={{ ...S.card, display:"flex", alignItems:"center", gap:12 }}>
+                <div style={{ width:36, height:36, borderRadius:10, background:"var(--ex-bg)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{e.emoji}</div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13, fontWeight:600, marginBottom:3 }}>{e.name}</div>
+                  <div style={{ fontSize:11, color:"var(--muted)" }}>{e.sets} × {e.reps}</div>
+                </div>
+                {e.gear && <span style={{ fontSize:10, padding:"2px 7px", borderRadius:999, background:"var(--warmup-bg)", color:"#f0a500", border:"1px solid var(--warmup-border)" }}>🔗</span>}
+                <span style={S.bdg(e.tc)}>{CAT_LABELS[e.cat]}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Étirements */}
+          <div style={{ ...S.card, background:"var(--stretch-bg)", border:"1px solid var(--stretch-border)", marginBottom:28, display:"flex", alignItems:"center", gap:12 }}>
+            <span style={{ fontSize:20 }}>🧘</span>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:600, fontSize:12, marginBottom:1 }}>Étirements · fin de séance</div>
+              <div style={{ fontSize:11, color:"var(--muted)" }}>5 étirements · ~7 min</div>
+            </div>
+            <span style={{ fontSize:11, color:"#34d399" }}>auto</span>
+          </div>
+
+          <div style={{ fontSize:10, color:"var(--muted)", textAlign:"center", marginBottom:16 }}>
+            Tiré d'un pool de {POOL.length} exercices · change à chaque séance
+          </div>
+
+          <button style={S.btnP()} onClick={handleCommencer}>Commencer →</button>
+        </div>
+      </div>
+    );
+
+    // ── INTRO ─────────────────────────────────────────────────────────────
+    if (screen === "intro") return (
+      <div style={S.root}>
+        <div style={{ padding:"24px 20px 0" }}><Dots cur={ei} n={session.length} /></div>
+        <div style={{ flex:1, padding:"16px 20px 32px", display:"flex", flexDirection:"column", gap:18 }} className="fin">
+          <div>
+            <div style={{ ...S.lbl, marginBottom:4 }}>Exercice {ei+1}/{session.length}</div>
+            <div style={{ ...S.sy, fontSize:28, lineHeight:1.15, marginBottom:12 }}>{ex.emoji} {ex.name}</div>
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              <span style={S.bdg(ex.tc)}>{ex.target}</span>
+              {ex.gear && <span style={{ ...S.bdg("#f0a500"), background:"var(--warmup-bg)" }}>🔗 {ex.gear}</span>}
+            </div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+            {[{ l:"séries", v:ex.sets },{ l:"reps", v:ex.reps },{ l:"repos", v:`${ex.restSeconds}s` }].map(s => (
+              <div key={s.l} style={{ ...S.card, textAlign:"center", padding:"12px 8px" }}>
+                <div style={{ ...S.sy, fontSize:14, marginBottom:2 }}>{s.v}</div>
+                <div style={{ ...S.lbl, marginBottom:0 }}>{s.l}</div>
+              </div>
+            ))}
+          </div>
+          <div>
+            <div style={{ ...S.lbl, marginBottom:6 }}>Position</div>
+            <div style={{ ...S.card, fontSize:13, color:"var(--fg2)", lineHeight:1.7 }}>{ex.pos}</div>
+          </div>
+          <div>
+            <div style={{ ...S.lbl, marginBottom:6 }}>Exécution</div>
+            <div style={{ fontSize:13, color:"var(--muted)", lineHeight:1.8, borderLeft:`2px solid ${ex.tc}`, paddingLeft:14 }}>{ex.cue}</div>
+          </div>
+          <div style={{ marginTop:"auto" }}>
+            <button style={S.btnP()} onClick={handleStart}>C'est parti →</button>
+          </div>
+        </div>
+      </div>
+    );
+
+    // ── COUNTDOWN ─────────────────────────────────────────────────────────
+    if (screen === "countdown") {
+      const isGo = cd > 3;
+      return (
+        <div style={{ ...S.root, justifyContent:"center", alignItems:"center", textAlign:"center", gap:12 }}>
+          <div style={{ ...S.lbl, color:"var(--subtle)" }}>{ex.name} · Série {set}/{ex.sets}</div>
+          <div key={cd} className="pop" style={{ ...S.sy, fontSize:isGo?72:108, lineHeight:1, color:isGo?"#22c55e":"var(--fg)" }}>
+            {isGo ? "GO !" : cd}
+          </div>
+          <div style={{ fontSize:11, color:"var(--subtle)" }}>{isGo ? "" : "prépare-toi"}</div>
+        </div>
+      );
+    }
+
+    // ── ACTIVE ────────────────────────────────────────────────────────────
+    if (screen === "active") {
+      // Exercice avec durée fixe (chaise, planche)
+      if (ex.timed) return (
+        <div style={S.root}>
+          <div style={{ padding:"24px 20px 0" }}><Dots cur={ei} n={session.length} /></div>
+          <div style={{ flex:1, padding:"16px 20px 32px", display:"flex", flexDirection:"column", justifyContent:"space-between" }}>
+            <div>
+              <div style={{ ...S.lbl, marginBottom:4 }}>{ex.name}</div>
+              <div style={{ ...S.sy, fontSize:22 }}>Série {set}<span style={{ color:"var(--subtle)" }}>/{ex.sets}</span></div>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
+              <div style={{ position:"relative", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                <Ring val={exTimer} max={exTimerMax} color={ex.tc} />
+                <div style={{ position:"absolute", textAlign:"center" }}>
+                  <div style={{ ...S.sy, fontSize:50, lineHeight:1 }}>{exTimer}</div>
+                  <div style={{ ...S.lbl, marginTop:4 }}>secondes</div>
+                </div>
+              </div>
+              <div style={{ fontSize:12, color:"var(--muted)", maxWidth:260, textAlign:"center", lineHeight:1.7 }}>
+                {ex.cue.split(".")[0]}.
+              </div>
+            </div>
+            <button style={S.btnP("#22c55e")} onClick={handleOk}>✓ Arrêter la série</button>
+          </div>
+        </div>
+      );
+
+      // Exercice avec reps
+      return (
+        <div style={S.root}>
+          <div style={{ padding:"24px 20px 0" }}><Dots cur={ei} n={session.length} /></div>
+          <div style={{ flex:1, padding:"16px 20px 32px", display:"flex", flexDirection:"column" }}>
+            <div style={{ ...S.lbl, marginBottom:4 }}>{ex.name}</div>
+            <div style={{ ...S.sy, fontSize:22 }}>Série {set}<span style={{ color:"var(--subtle)" }}>/{ex.sets}</span></div>
+            <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center", gap:12, textAlign:"center" }}>
+              <div style={{ fontSize:80 }}>{ex.emoji}</div>
+              <div style={{ ...S.sy, fontSize:30, color:ex.tc }}>{ex.reps}</div>
+              <div style={{ fontSize:12, color:"var(--muted)", maxWidth:280, lineHeight:1.7 }}>{ex.cue.split(".")[0]}.</div>
+            </div>
+            <button style={S.btnP("#22c55e")} onClick={handleOk}>✓ Série terminée</button>
+          </div>
+        </div>
+      );
+    }
+
+    // ── REST ──────────────────────────────────────────────────────────────
+    if (screen === "rest") return (
+      <div style={S.root}>
+        <div style={{ padding:"24px 20px 0" }}><Dots cur={ei} n={session.length} /></div>
+        <div style={{ flex:1, padding:"16px 20px 32px", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"space-between" }}>
+          <div style={{ textAlign:"center" }}>
+            <div style={{ ...S.lbl, marginBottom:6 }}>Repos · {ex.name}</div>
+            <div style={{ ...S.sy, fontSize:18, color:"var(--muted)" }}>Prochaine série {set+1}/{ex.sets}</div>
+          </div>
+          <div style={{ position:"relative", display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <Ring val={rest} max={restMax} color={ex.tc} />
+            <div style={{ position:"absolute", textAlign:"center" }}>
+              <div style={{ ...S.sy, fontSize:50, lineHeight:1 }}>{rest}</div>
+              <div style={{ ...S.lbl, marginTop:4 }}>secondes</div>
+            </div>
+          </div>
+          <button style={S.btnG} onClick={handleSkipRest}>Passer le repos →</button>
+        </div>
+      </div>
+    );
+
+    // ── EXERCISE DONE ─────────────────────────────────────────────────────
+    if (screen === "exdone") {
+      const nextEx = session[ei+1];
+      return (
+        <div style={{ ...S.root, justifyContent:"center", alignItems:"center", textAlign:"center", padding:"40px 24px", gap:20 }} className="fin">
+          <Dots cur={ei} n={session.length} />
+          <div style={{ fontSize:64 }}>{ex.emoji}</div>
+          <div style={{ ...S.sy, fontSize:26, color:"#22c55e" }}>Exercice terminé !</div>
+          <div style={{ fontSize:12, color:"var(--muted)" }}>{ex.sets} séries · {ex.reps}</div>
+          <div style={{ width:"100%", marginTop:8 }}>
+            {nextEx
+              ? <button style={S.btnP()} onClick={handleNext}>{nextEx.emoji} {nextEx.name} →</button>
+              : <button style={S.btnP("#34d399")} onClick={handleNext}>🧘 Étirements →</button>
+            }
+          </div>
+        </div>
+      );
+    }
+
+    // ── STRETCH INTRO ─────────────────────────────────────────────────────
+    if (screen === "stretchIntro") return (
+      <div style={S.root}>
+        <div style={{ padding:"24px 20px 0" }}><Dots cur={si} n={STRETCHES.length} doneColor="#34d399" activeColor="#fbbf24" /></div>
+        <div style={{ flex:1, padding:"16px 20px 32px", display:"flex", flexDirection:"column", gap:18 }} className="sideIn">
+          <div>
+            <div style={{ ...S.lbl, color:"#34d399", marginBottom:4 }}>Étirements · {si+1}/{STRETCHES.length}</div>
+            <div style={{ ...S.sy, fontSize:28, lineHeight:1.15, marginBottom:12 }}>{st.emoji} {st.name}</div>
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              {st.duration !== null
+                ? <span style={S.bdg(st.tc)}>{st.sides ? `${st.duration}s × 2 côtés` : `${st.duration}s`}</span>
+                : <span style={S.bdg(st.tc)}>{st.reps} répétitions</span>
+              }
+            </div>
+          </div>
+          <div>
+            <div style={{ ...S.lbl, marginBottom:6 }}>Position</div>
+            <div style={{ ...S.card, fontSize:13, color:"var(--fg2)", lineHeight:1.7 }}>{st.pos}</div>
+          </div>
+          <div>
+            <div style={{ ...S.lbl, marginBottom:6 }}>Conseil</div>
+            <div style={{ fontSize:13, color:"var(--muted)", lineHeight:1.8, borderLeft:`2px solid ${st.tc}`, paddingLeft:14 }}>{st.cue}</div>
+          </div>
+          <div style={{ marginTop:"auto", display:"flex", flexDirection:"column", gap:10 }}>
+            <button style={S.btnP("#34d399")} onClick={startStretch}>
+              {st.duration !== null ? "Lancer le timer →" : "C'est parti →"}
+            </button>
+            <button style={S.btnG} onClick={skipStretch}>Passer cet étirement</button>
+          </div>
+        </div>
+      </div>
+    );
+
+    // ── STRETCH ───────────────────────────────────────────────────────────
+    if (screen === "stretch") {
+      if (st.duration === null) return (
+        <div style={S.root}>
+          <div style={{ padding:"24px 20px 0" }}><Dots cur={si} n={STRETCHES.length} doneColor="#34d399" activeColor="#fbbf24" /></div>
+          <div style={{ flex:1, padding:"16px 20px 32px", display:"flex", flexDirection:"column" }} className="sideIn">
+            <div style={{ ...S.lbl, color:"#34d399", marginBottom:4 }}>Étirements · {si+1}/{STRETCHES.length}</div>
+            <div style={{ ...S.sy, fontSize:22, marginBottom:16 }}>{st.emoji} {st.name}</div>
+            <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center", gap:12, textAlign:"center" }}>
+              <div style={{ fontSize:80 }}>{st.emoji}</div>
+              <div style={{ ...S.sy, fontSize:28, color:st.tc }}>{st.reps} répétitions</div>
+              <div style={{ fontSize:12, color:"var(--muted)", maxWidth:280, lineHeight:1.7 }}>{st.cue.split(".")[0]}.</div>
+            </div>
+            <button style={S.btnP("#34d399")} onClick={finishCatCow}>✓ Terminé</button>
+          </div>
+        </div>
+      );
+
+      const sideLabel = st.sides ? (sSide === 0 ? "Côté gauche" : "Côté droit") : null;
+      return (
+        <div style={S.root}>
+          <div style={{ padding:"24px 20px 0" }}><Dots cur={si} n={STRETCHES.length} doneColor="#34d399" activeColor="#fbbf24" /></div>
+          <div style={{ flex:1, padding:"16px 20px 32px", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"space-between" }} className="sideIn">
+            <div style={{ textAlign:"center" }}>
+              <div style={{ ...S.lbl, color:"#34d399", marginBottom:4 }}>Étirements · {si+1}/{STRETCHES.length}</div>
+              <div style={{ ...S.sy, fontSize:22 }}>{st.emoji} {st.name}</div>
+              {sideLabel && <div key={sSide} className="pop" style={{ ...S.sy, fontSize:16, color:st.tc, marginTop:6 }}>{sideLabel}</div>}
+            </div>
+            <div style={{ position:"relative", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <Ring val={sTimer} max={sMax} color={st.tc} />
+              <div style={{ position:"absolute", textAlign:"center" }}>
+                <div style={{ ...S.sy, fontSize:50, lineHeight:1 }}>{sTimer}</div>
+                <div style={{ ...S.lbl, marginTop:4 }}>secondes</div>
+              </div>
+            </div>
+            <div style={{ width:"100%", display:"flex", flexDirection:"column", gap:10 }}>
+              {st.sides && sSide === 0 && (
+                <button style={S.btnP("#34d399")} onClick={() => { sfx.side(); setSSide(1); setSTimer(st.duration); setSMax(st.duration); }}>
+                  Côté droit →
+                </button>
+              )}
+              <button style={S.btnG} onClick={skipStretch}>Passer →</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── DONE ──────────────────────────────────────────────────────────────
+    if (screen === "done") return (
+      <div style={{ ...S.root, justifyContent:"center", alignItems:"center", textAlign:"center", padding:"40px 24px", gap:20 }} className="fin">
+        <div style={{ fontSize:80 }}>🎉</div>
+        <div style={{ ...S.sy, fontSize:32, lineHeight:1.1 }}>Séance<br/>terminée !</div>
+        <div style={{ fontSize:13, color:"var(--muted)", lineHeight:1.9 }}>
+          {session.length} exercices + {STRETCHES.length} étirements<br/>
+          {elapsed
+            ? <><span style={{ color:"var(--fg)", fontWeight:600 }}>{elapsed}</span> · Bien joué.</>
+            : "Bien joué."
+          }
+        </div>
+        <div style={{ width:"100%", marginTop:8 }}>
+          <button style={S.btnP()} onClick={handleRestart}>Nouvelle séance</button>
+        </div>
+      </div>
+    );
+
+    return null;
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
