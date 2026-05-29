@@ -1,22 +1,55 @@
 @import "tailwindcss";
 
-@theme {
-  --color-bg: #1a1a2e;
-  --color-surface: #16213e;
-  --color-primary: #e94560;
-  --color-text: #e0e0e0;
-  --color-muted: #a0a0b0;
-}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #app { height: 100%; }
+body { -webkit-tap-highlight-color: transparent; background: var(--bg); }
 
 :root {
-  background-color: var(--color-bg);
-  color: var(--color-text);
+  --bg:             #080808;
+  --surface:        #111111;
+  --border:         #1a1a1a;
+  --fg:             #e5e5e5;
+  --fg2:            #aaaaaa;
+  --muted:          #555555;
+  --subtle:         #282828;
+  --warmup-bg:      #100d00;
+  --warmup-border:  rgba(240,165,0,0.13);
+  --stretch-bg:     #081008;
+  --stretch-border: rgba(52,211,153,0.12);
+  --ex-bg:          #181818;
+  --ghost-border:   #1e1e1e;
+  --ring-track:     #1a1a1a;
+  --toggle-bg:      #141414;
+  --toggle-border:  #282828;
+  --toggle-fg:      #666666;
 }
 
 html.light {
-  --color-bg: #f5f5f5;
-  --color-surface: #ffffff;
-  --color-primary: #e94560;
-  --color-text: #1a1a2e;
-  --color-muted: #606070;
+  --bg:             #f2f1ed;
+  --surface:        #ffffff;
+  --border:         #e0dfd8;
+  --fg:             #1a1a1a;
+  --fg2:            #444444;
+  --muted:          #888888;
+  --subtle:         #d0cfca;
+  --warmup-bg:      #fefbf0;
+  --warmup-border:  rgba(180,120,0,0.15);
+  --stretch-bg:     #f0faf4;
+  --stretch-border: rgba(22,163,74,0.15);
+  --ex-bg:          #f5f4f0;
+  --ghost-border:   #d5d4ce;
+  --ring-track:     #e0dfd8;
+  --toggle-bg:      #ffffff;
+  --toggle-border:  #e0dfd8;
+  --toggle-fg:      #888888;
 }
+
+@keyframes pop    { 0% { transform: scale(1.4); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes fin    { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes sideIn { 0% { opacity: 0; transform: translateX(24px); } 100% { opacity: 1; transform: translateX(0); } }
+.pop    { animation: pop    0.3s cubic-bezier(.175, .885, .32, 1.275) both; }
+.fin    { animation: fin    0.3s ease-out both; }
+.sideIn { animation: sideIn 0.25s ease-out both; }
+
+button { transition: opacity 0.15s, transform 0.1s; -webkit-appearance: none; }
+button:active { opacity: 0.8; transform: scale(0.98); }
