@@ -48,7 +48,12 @@ export function useSession() {
   const { request: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
 
   const lastSessionIds = useLocalStorage<string[]>('last-session-ids', [])
-  const savedState     = useLocalStorage<PersistedState | null>('session-state', null)
+  const savedState     = useLocalStorage<PersistedState | null>('session-state', null, {
+    serializer: {
+      read:  (v: string) => { try { return JSON.parse(v) as PersistedState } catch { return null } },
+      write: (v: PersistedState | null) => JSON.stringify(v),
+    },
+  })
 
   function restoreSession(): Exercise[] {
     if (!savedState.value) return buildSession(lastSessionIds.value)
