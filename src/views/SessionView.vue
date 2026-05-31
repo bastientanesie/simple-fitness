@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { watch } from 'vue'
 import { useSession } from '../composables/useSession'
+
+const emit = defineEmits<{ 'open-settings': [] }>()
 import { exercises } from '../data/exercises'
 import { stretches } from '../data/stretches'
 import HomeScreen         from '../components/screens/HomeScreen.vue'
@@ -25,6 +27,7 @@ watch(s.screen, () => window.scrollTo(0, 0))
     :pool-size="exercises.length"
     @commencer="s.handleBegin()"
     @regen="s.handleRegen()"
+    @open-settings="emit('open-settings')"
   />
 
   <IntroScreen

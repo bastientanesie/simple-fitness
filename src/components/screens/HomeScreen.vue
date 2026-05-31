@@ -9,6 +9,7 @@ defineProps<{
 defineEmits<{
   commencer: []
   regen: []
+  'open-settings': []
 }>()
 </script>
 
@@ -26,6 +27,10 @@ defineEmits<{
             Séance<br/><span style="color: #f0a500;">renforcement</span>
           </div>
         </div>
+        <button
+          @click="$emit('open-settings')"
+          style="background: transparent; border: 1px solid var(--ghost-border); color: var(--muted); border-radius: 8px; padding: 5px 10px; cursor: pointer; font-size: 14px; flex-shrink: 0; margin-top: 2px;"
+        >⚙</button>
       </div>
 
       <!-- Warmup card -->
