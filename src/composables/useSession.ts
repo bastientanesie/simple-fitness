@@ -122,6 +122,11 @@ export function useSession() {
     }
   }
 
+  // ── Rest-end tick ────────────────────────────────────────────────────────
+  watch(restTimer.value, (v) => {
+    if (v > 0 && v <= 3) audio.tick()
+  })
+
   // ── Countdown watch ──────────────────────────────────────────────────────
   let cdTimeout: ReturnType<typeof setTimeout> | null = null
 
