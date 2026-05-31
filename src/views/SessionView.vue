@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { watch } from 'vue'
 import { useSession } from '../composables/useSession'
-
-const emit = defineEmits<{ 'open-settings': [] }>()
 import { exercises } from '../data/exercises'
 import { stretches } from '../data/stretches'
+
+const emit = defineEmits<{ 'open-settings': [] }>()
 import HomeScreen         from '../components/screens/HomeScreen.vue'
 import IntroScreen        from '../components/screens/IntroScreen.vue'
 import CountdownScreen    from '../components/screens/CountdownScreen.vue'
