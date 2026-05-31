@@ -127,6 +127,11 @@ export function useSession() {
     if (v > 0 && v <= 3) audio.tick()
   })
 
+  // ── Stretch-end tick ─────────────────────────────────────────────────────
+  watch(stretchTimer.value, (v) => {
+    if (v > 0 && v <= 3) audio.tick()
+  })
+
   // ── Countdown watch ──────────────────────────────────────────────────────
   let cdTimeout: ReturnType<typeof setTimeout> | null = null
 
@@ -265,6 +270,7 @@ export function useSession() {
 
   function startStretch() {
     stretchSide.value = 0
+    audio.next()
     screen.value = 'stretch'
   }
 
