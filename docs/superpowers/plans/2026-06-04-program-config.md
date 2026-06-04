@@ -1,3 +1,414 @@
+# Program Config Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Allow users to configure their fitness program (category quotas, per-exercise sets/rest, stretch order and toggles) via SettingsView, persisted to localStorage per device.
+
+**Architecture:** Introduce `useProgram` composable that owns `ProgramConfig` in localStorage, merges new pool entries on init, and exposes `buildSession` + `resolvedStretches`. Refactor `useSession` to consume `useProgram` instead of raw pool arrays. Implement SettingsView with three scrollable sections (session structure / exercises / stretches) plus a reset button.
+
+**Tech Stack:** Vue 3 Composition API (`<script setup>`), VueUse `useLocalStorage`, TypeScript, Tailwind CSS v4, inline styles (matching existing SettingsView pattern)
+
+---
+
+## File Map
+
+| Action | Path | Responsibility |
+|--------|------|----------------|
+| Modify | `src/data/exercises.ts` | Add `lunge-back` exercise |
+| Create | `src/composables/useProgram.ts` | Config types, DEFAULT_CONFIG, merge, buildSession, resolvedStretches |
+| Modify | `src/composables/useSession.ts` | Remove local buildSession, consume useProgram |
+| Modify | `src/views/SettingsView.vue` | Full Settings UI (3 sections + reset) |
+
+> Note: `plank`, `deadbug`, `pullap`, `wallang` are already in `exercises.ts`. The spec listed them as "manquants" but they were added earlier.
+
+---
+
+## Task 1 — Add `lunge-back` to exercises.ts
+
+**Files:**
+- Modify: `src/data/exercises.ts`
+
+- [ ] **Step 1: Add `lunge-back` after the existing `lunge` entry**
+
+In `src/data/exercises.ts`, after the `lunge` object (line ~35), insert:
+
+```ts
+  {
+    id: 'lunge-back', category: 'legs', name: 'Fente arrière', emoji: '🔙', tc: '#60a5fa',
+    target: 'Jambes · Fessiers', sets: 3, reps: '10 reps / côté', rest: 45, gear: null,
+    pos: 'Debout, pieds joints, mains sur les hanches',
+    cue: "Grand pas en arrière, descends le genou arrière près du sol sans le toucher. Tronc droit. Repousse sur le pied avant pour revenir. Alterne les côtés.",
+  },
+```
+
+- [ ] **Step 2: Verify the app still builds**
+
+```bash
+make build
+```
+
+Expected: build exits 0, no TypeScript errors.
+
+---
+
+## Task 2 — Create `src/composables/useProgram.ts`
+
+**Files:**
+- Create: `src/composables/useProgram.ts`
+
+- [ ] **Step 1: Write the full composable**
+
+Create `src/composables/useProgram.ts` with this exact content:
+
+```ts
+import { computed } from 'vue'
+import { useLocalStorage } from '@vueuse/core'
+import { exercises, type Exercise, type ExerciseCategory } from '../data/exercises'
+import { stretches, type Stretch } from '../data/stretches'
+
+export interface ExerciseOverride {
+  enabled: boolean
+  sets: number
+  rest: number
+}
+
+export interface StretchEntry {
+  id: string
+  enabled: boolean
+  duration?: number
+  reps?: number
+}
+
+export interface ProgramConfig {
+  categoryQuotas: Record<ExerciseCategory, number>
+  exercises: Record<string, ExerciseOverride>
+  stretches: StretchEntry[]
+}
+
+function makeDefault(): ProgramConfig {
+  return {
+    categoryQuotas: { legs: 2, back: 1, core: 1, shoulders: 1 },
+    exercises: Object.fromEntries(
+      exercises.map(e => [e.id, { enabled: true, sets: e.sets, rest: e.rest }])
+    ),
+    stretches: stretches.map(s => ({
+      id: s.id,
+      enabled: true,
+      ...(s.duration !== null ? { duration: s.duration } : { reps: (s as { reps: number }).reps }),
+    })),
+  }
+}
+
+function mergeConfig(saved: ProgramConfig): ProgramConfig {
+  const merged = { ...saved }
+
+  // Add exercises present in pool but absent from saved config
+  for (const e of exercises) {
+    if (!merged.exercises[e.id]) {
+      merged.exercises = {
+        ...merged.exercises,
+        [e.id]: { enabled: true, sets: e.sets, rest: e.rest },
+      }
+    }
+  }
+
+  // Append stretches present in pool but absent from saved config
+  const savedIds = new Set(merged.stretches.map(s => s.id))
+  const newStretches: StretchEntry[] = []
+  for (const s of stretches) {
+    if (!savedIds.has(s.id)) {
+      newStretches.push({
+        id: s.id,
+        enabled: true,
+        ...(s.duration !== null ? { duration: s.duration } : { reps: (s as { reps: number }).reps }),
+      })
+    }
+  }
+  if (newStretches.length > 0) {
+    merged.stretches = [...merged.stretches, ...newStretches]
+  }
+
+  return merged
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  return [...arr].sort(() => Math.random() - 0.5)
+}
+
+export function useProgram() {
+  const config = useLocalStorage<ProgramConfig>('program-config', makeDefault(), {
+    serializer: {
+      read: (v: string) => {
+        try {
+          return mergeConfig(JSON.parse(v) as ProgramConfig)
+        } catch {
+          return makeDefault()
+        }
+      },
+      write: (v: ProgramConfig) => JSON.stringify(v),
+    },
+  })
+
+  const resolvedStretches = computed<Stretch[]>(() =>
+    config.value.stretches
+      .filter(entry => entry.enabled)
+      .map(entry => {
+        const base = stretches.find(s => s.id === entry.id)
+        if (!base) return null
+        if (base.duration !== null) {
+          return { ...base, duration: entry.duration ?? base.duration } as Stretch
+        }
+        return { ...base, reps: entry.reps ?? (base as { reps: number }).reps } as Stretch
+      })
+      .filter((s): s is Stretch => s !== null)
+  )
+
+  function buildSession(lastIds: string[]): Exercise[] {
+    const categories: ExerciseCategory[] = ['legs', 'back', 'core', 'shoulders']
+    const selected: Exercise[] = []
+
+    for (const cat of categories) {
+      const quota = config.value.categoryQuotas[cat] ?? 0
+      if (quota === 0) continue
+
+      const enabled = exercises.filter(
+        e => e.category === cat && config.value.exercises[e.id]?.enabled
+      )
+      const pool = enabled.length <= quota
+        ? enabled
+        : enabled.filter(e => !lastIds.includes(e.id))
+
+      const candidates = pool.length > 0 ? pool : enabled
+      selected.push(...shuffle(candidates).slice(0, quota).map(e => ({
+        ...e,
+        sets: config.value.exercises[e.id]?.sets ?? e.sets,
+        rest: config.value.exercises[e.id]?.rest ?? e.rest,
+      })))
+    }
+
+    return shuffle(selected)
+  }
+
+  function resetToDefault() {
+    config.value = makeDefault()
+  }
+
+  return { config, resolvedStretches, buildSession, resetToDefault }
+}
+```
+
+- [ ] **Step 2: Verify the app builds**
+
+```bash
+make build
+```
+
+Expected: build exits 0, no TypeScript errors.
+
+---
+
+## Task 3 — Refactor `useSession.ts` to consume `useProgram`
+
+**Files:**
+- Modify: `src/composables/useSession.ts`
+
+- [ ] **Step 1: Replace the file header and module-level buildSession**
+
+Replace lines 1–35 (imports + `shuffle` + `buildSession` function) with:
+
+```ts
+import { ref, computed, watch } from 'vue'
+import { useLocalStorage, useWakeLock } from '@vueuse/core'
+import { exercises, type Exercise } from '../data/exercises'
+import { useTimer } from './useTimer'
+import { useAudio } from './useAudio'
+import { useProgram } from './useProgram'
+```
+
+- [ ] **Step 2: Wire useProgram inside useSession**
+
+At the top of the `useSession()` function body (after `const audio = useAudio()`), add:
+
+```ts
+const { buildSession, resolvedStretches } = useProgram()
+```
+
+- [ ] **Step 3: Fix `restoreSession` — uses `exercises` directly (still valid)**
+
+`restoreSession` still needs to look up exercises by id. It already imports `exercises`, so no change needed there. Verify its body still references `exercises.find(e => e.id === id)` — this is correct.
+
+- [ ] **Step 4: Fix `currentStretch` to use `resolvedStretches`**
+
+Replace:
+```ts
+  const currentStretch = computed(() =>
+    stretches[Math.min(stretchIndex.value, stretches.length - 1)]
+  )
+```
+
+With:
+```ts
+  const currentStretch = computed(() =>
+    resolvedStretches.value[Math.min(stretchIndex.value, resolvedStretches.value.length - 1)]
+  )
+```
+
+- [ ] **Step 5: Fix `advanceStretch` to use `resolvedStretches`**
+
+Replace:
+```ts
+  function advanceStretch() {
+    stretchTimer.stop()
+    if (stretchIndex.value < stretches.length - 1) {
+      setTimeout(() => {
+        stretchIndex.value++
+        stretchSide.value = 0
+        screen.value = 'stretchIntro'
+      }, 600)
+    } else {
+      setTimeout(() => finishSession(), 600)
+    }
+  }
+```
+
+With:
+```ts
+  function advanceStretch() {
+    stretchTimer.stop()
+    if (stretchIndex.value < resolvedStretches.value.length - 1) {
+      setTimeout(() => {
+        stretchIndex.value++
+        stretchSide.value = 0
+        screen.value = 'stretchIntro'
+      }, 600)
+    } else {
+      setTimeout(() => finishSession(), 600)
+    }
+  }
+```
+
+- [ ] **Step 6: Fix `handleNext` to skip stretch phase when resolvedStretches is empty**
+
+Replace:
+```ts
+  function handleNext() {
+    if (exerciseIndex.value < session.value.length - 1) {
+      exerciseIndex.value++
+      setNumber.value = 1
+      screen.value = 'intro'
+    } else {
+      audio.exdone()
+      stretchIndex.value = 0
+      stretchSide.value = 0
+      screen.value = 'stretchIntro'
+    }
+  }
+```
+
+With:
+```ts
+  function handleNext() {
+    if (exerciseIndex.value < session.value.length - 1) {
+      exerciseIndex.value++
+      setNumber.value = 1
+      screen.value = 'intro'
+    } else {
+      audio.exdone()
+      if (resolvedStretches.value.length === 0) {
+        finishSession()
+      } else {
+        stretchIndex.value = 0
+        stretchSide.value = 0
+        screen.value = 'stretchIntro'
+      }
+    }
+  }
+```
+
+- [ ] **Step 7: Fix `skipStretch` to use `resolvedStretches`**
+
+Replace:
+```ts
+  function skipStretch() {
+    stretchTimer.stop()
+    if (stretchIndex.value < stretches.length - 1) {
+      stretchIndex.value++
+      stretchSide.value = 0
+      screen.value = 'stretchIntro'
+    } else {
+      finishSession()
+    }
+  }
+```
+
+With:
+```ts
+  function skipStretch() {
+    stretchTimer.stop()
+    if (stretchIndex.value < resolvedStretches.value.length - 1) {
+      stretchIndex.value++
+      stretchSide.value = 0
+      screen.value = 'stretchIntro'
+    } else {
+      finishSession()
+    }
+  }
+```
+
+- [ ] **Step 8: Fix `finishCatCow` to use `resolvedStretches`**
+
+Replace:
+```ts
+  function finishCatCow() {
+    audio.exdone()
+    if (stretchIndex.value < stretches.length - 1) {
+      stretchIndex.value++
+      stretchSide.value = 0
+      screen.value = 'stretchIntro'
+    } else {
+      finishSession()
+    }
+  }
+```
+
+With:
+```ts
+  function finishCatCow() {
+    audio.exdone()
+    if (stretchIndex.value < resolvedStretches.value.length - 1) {
+      stretchIndex.value++
+      stretchSide.value = 0
+      screen.value = 'stretchIntro'
+    } else {
+      finishSession()
+    }
+  }
+```
+
+- [ ] **Step 9: Remove unused `stretches` import**
+
+The `import { stretches } from '../data/stretches'` line is now unused — remove it.
+
+- [ ] **Step 10: Verify build**
+
+```bash
+make build
+```
+
+Expected: build exits 0, no TypeScript errors.
+
+---
+
+## Task 4 — Implement SettingsView.vue
+
+**Files:**
+- Modify: `src/views/SettingsView.vue`
+
+This task replaces the entire SettingsView stub with the full 3-section UI. Read `src/composables/useProgram.ts` (from Task 2) and `src/data/exercises.ts` before editing.
+
+- [ ] **Step 1: Replace the entire file content**
+
+```vue
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useTheme } from '../composables/useTheme'
@@ -257,7 +668,7 @@ function confirmReset() {
                 <button
                   @click="moveStretch(index, -1)"
                   :disabled="index === 0"
-                  style="width: 20px; height: 18px; border-radius: 4px; border: 1px solid var(--ghost-border); background: transparent; color: var(--fg); cursor: pointer; font-size: 10px; line-height: 1;"
+                  style="width: 20px; height: 18px; border-radius: 4px; border: 1px solid var(--ghost-border); background: transparent; color: var(--fg); cursor: pointer; font-size: 10px; line-height: 1; disabled:opacity-30;"
                   :style="{ opacity: index === 0 ? 0.3 : 1 }"
                 >↑</button>
                 <button
@@ -337,3 +748,51 @@ function confirmReset() {
     </div>
   </div>
 </template>
+```
+
+- [ ] **Step 2: Verify build**
+
+```bash
+make build
+```
+
+Expected: build exits 0, no TypeScript errors.
+
+- [ ] **Step 3: Manual smoke test**
+
+Run `make dev`, open the app in the browser, navigate to Settings and verify:
+- Category steppers change the quota value
+- Warning appears when quota > enabled exercises count
+- Exercise toggle hides/shows sets and rest steppers
+- Stretch toggle, reorder buttons (↑/↓), and duration/reps steppers work
+- Reset button shows confirmation dialog; Confirmer resets to defaults; Annuler dismisses
+
+---
+
+## Self-Review
+
+**Spec coverage:**
+
+| Spec section | Covered by |
+|---|---|
+| § Pool étendu (lunge-back) | Task 1 |
+| § Type `ProgramConfig` | Task 2 |
+| § Clé localStorage `program-config` | Task 2 |
+| § Config par défaut | Task 2 `makeDefault()` |
+| § Merge au chargement | Task 2 `mergeConfig()` |
+| § `buildSession` avec fallback lastIds | Task 2 |
+| § Interface publique useProgram | Task 2 return |
+| § useSession consomme useProgram | Task 3 |
+| § `resolvedStretches` remplace `stretches` | Task 3 steps 4–8 |
+| § Skip stretch phase si vide | Task 3 step 6 |
+| § Étirements non persistés dans session-state | No change needed — stretches were never in PersistedState |
+| § SettingsView § 5.1 quotas + warnings | Task 4 |
+| § SettingsView § 5.2 exercices toggle + sets/rest | Task 4 |
+| § SettingsView § 5.3 étirements toggle + ordre + durée | Task 4 |
+| § Réinitialisation avec confirmation | Task 4 |
+| § Auto-save | Task 2 (`useLocalStorage` auto-saves on every mutation) |
+| § Settings sans effet séance en cours | Guaranteed — useProgram is only called at session start via buildSession |
+
+**Out-of-scope items confirmed absent:** multi-profils, import/export, exercices personnalisés, durée/reps configurables — aucun n'est implémenté.
+
+**Type consistency check:** `ExerciseOverride`, `StretchEntry`, `ProgramConfig` définis dans Task 2 et consommés tels quels dans Tasks 3 et 4. `resolvedStretches` est `ComputedRef<Stretch[]>` — `Stretch` importé de `stretches.ts`, utilisé directement dans `useSession.ts` et `SettingsView.vue`.

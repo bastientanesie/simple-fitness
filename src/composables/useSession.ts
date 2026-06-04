@@ -1,9 +1,9 @@
 import { ref, computed, watch } from 'vue'
 import { useLocalStorage, useWakeLock } from '@vueuse/core'
 import { exercises, type Exercise } from '../data/exercises'
-import { stretches } from '../data/stretches'
 import { useTimer } from './useTimer'
 import { useAudio } from './useAudio'
+import { useProgram } from './useProgram'
 
 export type ScreenName =
   | 'home' | 'intro' | 'countdown' | 'active'
@@ -18,22 +18,6 @@ interface PersistedState {
   screen: ScreenName
 }
 
-function shuffle<T>(arr: T[]): T[] {
-  return [...arr].sort(() => Math.random() - 0.5)
-}
-
-function buildSession(lastIds: string[]): Exercise[] {
-  const pickFrom = (pool: Exercise[], n: number) => {
-    const fresh = pool.filter(e => !lastIds.includes(e.id))
-    return shuffle(fresh.length >= n ? fresh : pool).slice(0, n)
-  }
-  const legs      = pickFrom(exercises.filter(e => e.category === 'legs'),      2)
-  const back      = pickFrom(exercises.filter(e => e.category === 'back'),      1)
-  const core      = pickFrom(exercises.filter(e => e.category === 'core'),      1)
-  const shoulders = pickFrom(exercises.filter(e => e.category === 'shoulders'), 1)
-  return shuffle([...legs, ...back, ...core, ...shoulders])
-}
-
 function snapScreen(s: ScreenName): ScreenName {
   if (s === 'countdown' || s === 'active' || s === 'rest') return 'intro'
   if (s === 'stretch') return 'stretchIntro'
@@ -42,6 +26,7 @@ function snapScreen(s: ScreenName): ScreenName {
 
 export function useSession() {
   const audio = useAudio()
+  const { config, buildSession, resolvedStretches } = useProgram()
   const exTimer      = useTimer()
   const restTimer    = useTimer()
   const stretchTimer = useTimer()
@@ -60,9 +45,14 @@ export function useSession() {
     const restored = savedState.value.sessionIds
       .map(id => exercises.find(e => e.id === id))
       .filter((e): e is Exercise => e !== undefined)
-    return restored.length === savedState.value.sessionIds.length
-      ? restored
-      : buildSession(lastSessionIds.value)
+    if (restored.length !== savedState.value.sessionIds.length) {
+      return buildSession(lastSessionIds.value)
+    }
+    return restored.map(e => ({
+      ...e,
+      sets: config.value.exercises[e.id]?.sets ?? e.sets,
+      rest: config.value.exercises[e.id]?.rest ?? e.rest,
+    }))
   }
 
   const session       = ref<Exercise[]>(restoreSession())
@@ -79,7 +69,7 @@ export function useSession() {
     session.value[Math.min(exerciseIndex.value, session.value.length - 1)] ?? session.value[0]
   )
   const currentStretch = computed(() =>
-    stretches[Math.min(stretchIndex.value, stretches.length - 1)]
+    resolvedStretches.value[Math.min(stretchIndex.value, resolvedStretches.value.length - 1)]
   )
 
   function persist() {
@@ -111,7 +101,7 @@ export function useSession() {
 
   function advanceStretch() {
     stretchTimer.stop()
-    if (stretchIndex.value < stretches.length - 1) {
+    if (stretchIndex.value < resolvedStretches.value.length - 1) {
       setTimeout(() => {
         stretchIndex.value++
         stretchSide.value = 0
@@ -242,9 +232,13 @@ export function useSession() {
       screen.value = 'intro'
     } else {
       audio.exdone()
-      stretchIndex.value = 0
-      stretchSide.value = 0
-      screen.value = 'stretchIntro'
+      if (resolvedStretches.value.length === 0) {
+        finishSession()
+      } else {
+        stretchIndex.value = 0
+        stretchSide.value = 0
+        screen.value = 'stretchIntro'
+      }
     }
   }
 
@@ -276,7 +270,7 @@ export function useSession() {
 
   function skipStretch() {
     stretchTimer.stop()
-    if (stretchIndex.value < stretches.length - 1) {
+    if (stretchIndex.value < resolvedStretches.value.length - 1) {
       stretchIndex.value++
       stretchSide.value = 0
       screen.value = 'stretchIntro'
@@ -287,7 +281,7 @@ export function useSession() {
 
   function finishCatCow() {
     audio.exdone()
-    if (stretchIndex.value < stretches.length - 1) {
+    if (stretchIndex.value < resolvedStretches.value.length - 1) {
       stretchIndex.value++
       stretchSide.value = 0
       screen.value = 'stretchIntro'

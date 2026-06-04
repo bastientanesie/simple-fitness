@@ -1,6 +1,6 @@
 # Design — Configuration de programme personnalisé
 
-> Conçu le 2026-06-04.
+> Conçu le 2026-06-04. Décisions affinées le 2026-06-04 (session de grilling).
 
 ## Contexte
 
@@ -16,6 +16,9 @@ L'application fitness est actuellement câblée pour un seul programme en dur (p
 - **Personnalisation complète par exercice** — séries et repos modifiables individuellement.
 - **Pool extensible dans le code** — les nouveaux exercices sont ajoutés dans `exercises.ts`; l'utilisateur les active/désactive depuis Settings.
 - **Config par défaut = comportement actuel** — aucun changement visible sans configuration.
+- **Seuls `sets` et `rest` sont configurables** — la durée des exercices `timed` et les reps des exercices `reps` restent dans `exercises.ts` et ne sont pas exposés dans Settings.
+- **Auto-save** — chaque modification dans SettingsView est persistée immédiatement via `useLocalStorage`. Pas de bouton "Enregistrer".
+- **Settings sans effet sur la séance en cours** — les modifications de config n'affectent que la prochaine séance. La séance active continue avec les exercices générés au départ.
 
 ---
 
@@ -90,15 +93,24 @@ const DEFAULT_CONFIG: ProgramConfig = {
 
 **Responsabilités** :
 - Charger / persister la `ProgramConfig` en localStorage via `useLocalStorage`
-- Calculer les exercices résolus (pool filtré + overrides appliqués)
+- Merger les nouveaux exercices/étirements du pool au chargement (voir ci-dessous)
 - Calculer les étirements résolus (filtrés, ordonnés, overrides appliqués)
 - Exposer `buildSession(lastIds: string[]): Exercise[]`
 
-**`buildSession`** :
-1. Pour chaque catégorie, filtrer les exercices activés et non présents dans `lastIds`
-2. Piocher aléatoirement `quota[catégorie]` exercices (sans remise)
-3. Retourner le tableau d'exercices avec `sets` et `rest` overridés par la config
-4. Si une catégorie a moins d'exercices disponibles que le quota, prendre tous ceux disponibles (dégradation gracieuse)
+### Merge au chargement
+
+À l'initialisation, `useProgram` fusionne la config sauvegardée avec `DEFAULT_CONFIG` :
+
+- **Exercices** : tout exercice présent dans le pool mais absent de `config.exercises` est ajouté avec `{ enabled: true, sets: e.sets, rest: e.rest }`. Les overrides existants sont préservés.
+- **Étirements** : tout étirement présent dans `stretches.ts` mais absent de `config.stretches` est ajouté **en fin de tableau**, activé, avec ses valeurs par défaut. L'ordre des entrées existantes est préservé.
+
+### `buildSession`
+
+1. Pour chaque catégorie, récupérer les exercices activés dans la config
+2. Si `exercices activés dans la catégorie ≤ quota[catégorie]` → ignorer `lastIds` pour cette catégorie (évite les doublons forcés quand le pool est petit)
+3. Sinon, exclure les exercices présents dans `lastIds` avant le tirage
+4. Piocher aléatoirement `quota[catégorie]` exercices (sans remise), avec dégradation gracieuse si pool insuffisant
+5. Retourner le tableau d'exercices avec `sets` et `rest` overridés par la config
 
 **Interface publique** :
 ```ts
@@ -116,8 +128,11 @@ const DEFAULT_CONFIG: ProgramConfig = {
 
 - Remplacer les imports directs de `exercises` et `stretches` par `useProgram()`
 - `buildSession` vient de `useProgram`
-- `currentStretch` et la longueur de la liste d'étirements utilisent `resolvedStretches`
+- La liste d'étirements est fournie par `resolvedStretches` (computed depuis `useProgram`)
+- Au rechargement de page en cours d'étirement, `resolvedStretches` est recalculé depuis la config sauvegardée — la liste d'étirements n'est **pas** persistée dans `session-state`
+- Si `resolvedStretches.length === 0`, la phase étirements est sautée : `useSession` passe directement de `exdone` à `done`
 - `handleRegen` et `handleRestart` appellent `buildSession` via `useProgram`
+- La gestion de `last-session-ids` reste dans `useSession`
 
 Aucun changement à la machine d'état ni aux handlers audio/timer.
 
@@ -125,15 +140,18 @@ Aucun changement à la machine d'état ni aux handlers audio/timer.
 
 ## 5. SettingsView
 
-Trois sections scrollables dans `src/views/SettingsView.vue`.
+Trois sections dans `src/views/SettingsView.vue` formant une page scrollable unique.
+
+`SettingsView` importe `exercises` depuis `exercises.ts` (pour la structure du pool) et `config` depuis `useProgram()` (pour l'état des overrides). Pas de helpers supplémentaires dans `useProgram`.
 
 ### 5.1 Structure de séance
 
 Pour chaque catégorie (Jambes, Dos, Gainage, Épaules) :
 - Label de catégorie
 - Stepper libre : `−` / valeur / `+` (min 0)
+- Si `exercices activés dans la catégorie < quota` : indicateur d'avertissement inline (ex. "seulement N disponible(s)")
 
-Total affiché sous les steppers : « N exercices par séance ».
+Total affiché sous les steppers : « N exercices par séance » (somme des quotas configurés).
 
 ### 5.2 Exercices
 
@@ -147,11 +165,11 @@ Liste groupée par catégorie. Chaque ligne d'exercice :
 Liste ordonnée. Chaque ligne :
 - Toggle on/off + nom de l'étirement
 - Boutons ↑ / ↓ pour réordonner
-- Stepper libre de durée en secondes (incrément 5s) — ou reps si l'étirement est de type reps
+- Stepper libre de durée en secondes (incrément 5s) — ou reps si l'étirement est de type reps (incrément 1)
 
 ### Réinitialisation
 
-Bouton « Réinitialiser » en bas de page : remet `DEFAULT_CONFIG` et affiche une confirmation.
+Bouton « Réinitialiser » en bas de page : affiche une boîte de dialogue de confirmation (Annuler / Confirmer) avant de remettre `DEFAULT_CONFIG`.
 
 ---
 
@@ -175,3 +193,5 @@ SessionView / SettingsView    ← affichage
 - Import / export de configuration
 - Création d'exercices personnalisés par l'utilisateur (nom, emoji, etc.)
 - Progression automatique (augmentation des séries au fil des semaines)
+- Durée des exercices `timed` configurable
+- Nombre de reps des exercices `reps` configurable

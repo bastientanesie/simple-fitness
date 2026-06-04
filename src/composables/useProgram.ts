@@ -1,0 +1,142 @@
+import { computed } from 'vue'
+import { useLocalStorage } from '@vueuse/core'
+import { exercises, type Exercise, type ExerciseCategory } from '../data/exercises'
+import { stretches, type Stretch } from '../data/stretches'
+
+export interface ExerciseOverride {
+  enabled: boolean
+  sets: number
+  rest: number
+}
+
+export interface StretchEntry {
+  id: string
+  enabled: boolean
+  duration?: number
+  reps?: number
+}
+
+export interface ProgramConfig {
+  categoryQuotas: Record<ExerciseCategory, number>
+  exercises: Record<string, ExerciseOverride>
+  stretches: StretchEntry[]
+}
+
+function makeDefault(): ProgramConfig {
+  return {
+    categoryQuotas: { legs: 2, back: 1, core: 1, shoulders: 1 },
+    exercises: Object.fromEntries(
+      exercises.map(e => [e.id, { enabled: true, sets: e.sets, rest: e.rest }])
+    ),
+    stretches: stretches.map(s => ({
+      id: s.id,
+      enabled: true,
+      ...(s.duration !== null ? { duration: s.duration } : { reps: (s as { reps: number }).reps }),
+    })),
+  }
+}
+
+function mergeConfig(saved: ProgramConfig): ProgramConfig {
+  if (!saved?.exercises || !saved?.stretches || !saved?.categoryQuotas) {
+    return makeDefault()
+  }
+  const merged = { ...saved }
+
+  // Add exercises present in pool but absent from saved config
+  for (const e of exercises) {
+    if (!merged.exercises[e.id]) {
+      merged.exercises = {
+        ...merged.exercises,
+        [e.id]: { enabled: true, sets: e.sets, rest: e.rest },
+      }
+    }
+  }
+
+  // Append stretches present in pool but absent from saved config
+  const savedIds = new Set(merged.stretches.map(s => s.id))
+  const newStretches: StretchEntry[] = []
+  for (const s of stretches) {
+    if (!savedIds.has(s.id)) {
+      newStretches.push({
+        id: s.id,
+        enabled: true,
+        ...(s.duration !== null ? { duration: s.duration } : { reps: (s as { reps: number }).reps }),
+      })
+    }
+  }
+  if (newStretches.length > 0) {
+    merged.stretches = [...merged.stretches, ...newStretches]
+  }
+
+  return merged
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
+export function useProgram() {
+  const config = useLocalStorage<ProgramConfig>('program-config', makeDefault(), {
+    serializer: {
+      read: (v: string) => {
+        try {
+          return mergeConfig(JSON.parse(v) as ProgramConfig)
+        } catch {
+          return makeDefault()
+        }
+      },
+      write: (v: ProgramConfig) => JSON.stringify(v),
+    },
+  })
+
+  const resolvedStretches = computed<Stretch[]>(() =>
+    config.value.stretches
+      .filter(entry => entry.enabled)
+      .map(entry => {
+        const base = stretches.find(s => s.id === entry.id)
+        if (!base) return null
+        if (base.duration !== null) {
+          return { ...base, duration: entry.duration ?? base.duration } as Stretch
+        }
+        return { ...base, reps: entry.reps ?? (base as { reps: number }).reps } as Stretch
+      })
+      .filter((s): s is Stretch => s !== null)
+  )
+
+  function buildSession(lastIds: string[]): Exercise[] {
+    const categories: ExerciseCategory[] = ['legs', 'back', 'core', 'shoulders']
+    const selected: Exercise[] = []
+
+    for (const cat of categories) {
+      const quota = config.value.categoryQuotas[cat] ?? 0
+      if (quota === 0) continue
+
+      const enabled = exercises.filter(
+        e => e.category === cat && config.value.exercises[e.id]?.enabled
+      )
+      const pool = enabled.length <= quota
+        ? enabled
+        : enabled.filter(e => !lastIds.includes(e.id))
+
+      const candidates = pool.length > 0 ? pool : enabled
+      selected.push(...shuffle(candidates).slice(0, quota).map(e => ({
+        ...e,
+        sets: config.value.exercises[e.id]?.sets ?? e.sets,
+        rest: config.value.exercises[e.id]?.rest ?? e.rest,
+      })))
+    }
+
+    return shuffle(selected)
+  }
+
+  function resetToDefault() {
+    config.value = makeDefault()
+  }
+
+  return { config, resolvedStretches, buildSession, resetToDefault }
+}

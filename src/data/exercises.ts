@@ -38,6 +38,12 @@ export const exercises: Exercise[] = [
     cue: "Grand pas en avant, descends le genou arrière vers le sol sans le toucher. Genou avant dans l'axe du pied, pas au-delà des orteils. Repousse pour revenir.",
   },
   {
+    id: 'lunge-back', category: 'legs', name: 'Fente arrière', emoji: '🔙', tc: '#60a5fa',
+    target: 'Jambes · Fessiers', sets: 3, reps: '10 reps / côté', rest: 45, gear: null,
+    pos: 'Debout, pieds joints, mains sur les hanches',
+    cue: "Grand pas en arrière, descends le genou arrière près du sol sans le toucher. Tronc droit. Repousse sur le pied avant pour revenir. Alterne les côtés.",
+  },
+  {
     id: 'wallsit', category: 'legs', name: 'Chaise', emoji: '🪑', tc: '#60a5fa',
     target: 'Jambes · Genoux', sets: 3, reps: '30 s', duration: 30, rest: 45, gear: null,
     pos: 'Dos contre le mur, pieds à 60 cm du mur, genoux à 90°',
