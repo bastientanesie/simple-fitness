@@ -7,6 +7,7 @@ export interface ExerciseOverride {
   enabled: boolean
   sets: number
   rest: number
+  duration?: number
 }
 
 export interface StretchEntry {
@@ -26,7 +27,12 @@ function makeDefault(): ProgramConfig {
   return {
     categoryQuotas: { legs: 2, back: 1, core: 1, shoulders: 1 },
     exercises: Object.fromEntries(
-      exercises.map(e => [e.id, { enabled: true, sets: e.sets, rest: e.rest }])
+      exercises.map(e => [e.id, {
+        enabled: true,
+        sets: e.sets,
+        rest: e.rest,
+        ...(e.duration !== undefined ? { duration: e.duration } : {}),
+      }])
     ),
     stretches: stretches.map(s => ({
       id: s.id,
@@ -47,7 +53,12 @@ function mergeConfig(saved: ProgramConfig): ProgramConfig {
     if (!merged.exercises[e.id]) {
       merged.exercises = {
         ...merged.exercises,
-        [e.id]: { enabled: true, sets: e.sets, rest: e.rest },
+        [e.id]: {
+          enabled: true,
+          sets: e.sets,
+          rest: e.rest,
+          ...(e.duration !== undefined ? { duration: e.duration } : {}),
+        },
       }
     }
   }
@@ -128,6 +139,9 @@ export function useProgram() {
         ...e,
         sets: config.value.exercises[e.id]?.sets ?? e.sets,
         rest: config.value.exercises[e.id]?.rest ?? e.rest,
+        ...(e.duration !== undefined
+          ? { duration: config.value.exercises[e.id]?.duration ?? e.duration }
+          : {}),
       })))
     }
 

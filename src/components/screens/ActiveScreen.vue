@@ -11,11 +11,17 @@ const props = defineProps<{
   setNumber: number
   exTimerValue: number
   exTimerMax: number
+  exerciseSide?: 0 | 1
 }>()
 
 defineEmits<{ ok: [] }>()
 
 const isTimed = computed(() => props.exercise.duration !== undefined)
+
+const sideLabel = computed(() => {
+  if (!props.exercise.sides || props.exerciseSide === undefined) return null
+  return props.exerciseSide === 0 ? 'Côté gauche' : 'Côté droit'
+})
 </script>
 
 <template>
@@ -32,6 +38,12 @@ const isTimed = computed(() => props.exercise.duration !== undefined)
           <div style="font-family: 'Syne', sans-serif; font-weight: 800; font-size: 22px;">
             Série {{ setNumber }}<span style="color: var(--subtle);">/{{ exercise.sets }}</span>
           </div>
+          <div
+            v-if="sideLabel"
+            :key="exerciseSide"
+            class="sideIn"
+            style="font-size: 11px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-top: 2px;"
+          >{{ sideLabel }}</div>
         </div>
         <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
           <div style="position: relative; display: flex; align-items: center; justify-content: center;">
@@ -59,6 +71,12 @@ const isTimed = computed(() => props.exercise.duration !== undefined)
         <div style="font-family: 'Syne', sans-serif; font-weight: 800; font-size: 22px;">
           Série {{ setNumber }}<span style="color: var(--subtle);">/{{ exercise.sets }}</span>
         </div>
+        <div
+          v-if="sideLabel"
+          :key="exerciseSide"
+          class="sideIn"
+          style="font-size: 11px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-top: 2px;"
+        >{{ sideLabel }}</div>
         <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 12px; text-align: center;">
           <div style="font-size: 80px;">{{ exercise.emoji }}</div>
           <div :style="{ fontFamily: '\'Syne\', sans-serif', fontWeight: 800, fontSize: '30px', color: exercise.tc }">{{ exercise.reps }}</div>

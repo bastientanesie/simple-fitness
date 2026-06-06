@@ -8,6 +8,7 @@ import { useProgram } from './useProgram'
 export type ScreenName =
   | 'home' | 'intro' | 'countdown' | 'active'
   | 'rest' | 'exdone' | 'stretchIntro' | 'stretch' | 'done'
+  | 'stretchCountdown' | 'stretchSideChange' | 'exerciseSideChange'
 
 interface PersistedState {
   sessionIds: string[]
@@ -15,12 +16,14 @@ interface PersistedState {
   setNumber: number
   stretchIndex: number
   stretchSide: 0 | 1
+  exerciseSide: 0 | 1
   screen: ScreenName
 }
 
 function snapScreen(s: ScreenName): ScreenName {
   if (s === 'countdown' || s === 'active' || s === 'rest') return 'intro'
-  if (s === 'stretch') return 'stretchIntro'
+  if (s === 'exerciseSideChange') return 'intro'
+  if (s === 'stretch' || s === 'stretchCountdown' || s === 'stretchSideChange') return 'stretchIntro'
   return s
 }
 
@@ -52,6 +55,9 @@ export function useSession() {
       ...e,
       sets: config.value.exercises[e.id]?.sets ?? e.sets,
       rest: config.value.exercises[e.id]?.rest ?? e.rest,
+      ...(e.duration !== undefined
+        ? { duration: config.value.exercises[e.id]?.duration ?? e.duration }
+        : {}),
     }))
   }
 
@@ -61,6 +67,7 @@ export function useSession() {
   const setNumber     = ref(savedState.value?.setNumber ?? 1)
   const stretchIndex  = ref(savedState.value?.stretchIndex ?? 0)
   const stretchSide   = ref<0 | 1>(savedState.value?.stretchSide ?? 0)
+  const exerciseSide  = ref<0 | 1>(savedState.value?.exerciseSide ?? 0)
   const countdownValue = ref(1)
   const elapsed       = ref('')
   let startTime: number | null = null
@@ -83,6 +90,7 @@ export function useSession() {
       setNumber: setNumber.value,
       stretchIndex: stretchIndex.value,
       stretchSide: stretchSide.value,
+      exerciseSide: exerciseSide.value,
       screen: screen.value,
     }
   }
@@ -123,19 +131,36 @@ export function useSession() {
   })
 
   // ── Countdown watch ──────────────────────────────────────────────────────
+  const countdownScreens: ScreenName[] = ['countdown', 'stretchCountdown', 'stretchSideChange', 'exerciseSideChange']
   let cdTimeout: ReturnType<typeof setTimeout> | null = null
 
   watch([screen, countdownValue], ([s, cdv]) => {
-    if (s !== 'countdown') {
+    if (!countdownScreens.includes(s as ScreenName)) {
       if (cdTimeout) { clearTimeout(cdTimeout); cdTimeout = null }
       return
     }
-    if (cdv <= 3) {
+    if (cdTimeout) { clearTimeout(cdTimeout); cdTimeout = null }
+    if (cdv <= 5) {
       audio.tick()
       cdTimeout = setTimeout(() => { countdownValue.value++ }, 800)
     } else {
       audio.go()
-      cdTimeout = setTimeout(() => { screen.value = 'active' }, 650)
+      if (s === 'countdown') {
+        cdTimeout = setTimeout(() => { screen.value = 'active' }, 650)
+      } else if (s === 'stretchCountdown') {
+        cdTimeout = setTimeout(() => { screen.value = 'stretch' }, 650)
+      } else if (s === 'stretchSideChange') {
+        cdTimeout = setTimeout(() => {
+          stretchSide.value = 1
+          screen.value = 'stretch'
+        }, 650)
+      } else if (s === 'exerciseSideChange') {
+        cdTimeout = setTimeout(() => {
+          exerciseSide.value = 1
+          setNumber.value = 1
+          screen.value = 'countdown'
+        }, 650)
+      }
     }
   })
 
@@ -143,7 +168,7 @@ export function useSession() {
   watch(screen, (s) => {
     persist()
 
-    if (s === 'countdown') {
+    if (countdownScreens.includes(s)) {
       countdownValue.value = 1
     }
 
@@ -158,8 +183,12 @@ export function useSession() {
               screen.value = 'countdown'
             })
             screen.value = 'rest'
+          } else if (ex.sides && exerciseSide.value === 0) {
+            audio.side()
+            screen.value = 'exerciseSideChange'
           } else {
             audio.exdone()
+            exerciseSide.value = 0
             screen.value = 'exdone'
           }
         })
@@ -172,11 +201,7 @@ export function useSession() {
         stretchTimer.start(st.duration, () => {
           if (st.sides && stretchSide.value === 0) {
             audio.side()
-            stretchSide.value = 1
-            stretchTimer.start(st.duration!, () => {
-              audio.exdone()
-              advanceStretch()
-            })
+            screen.value = 'stretchSideChange'
           } else {
             audio.exdone()
             advanceStretch()
@@ -211,8 +236,12 @@ export function useSession() {
         screen.value = 'countdown'
       })
       screen.value = 'rest'
+    } else if (ex.sides && exerciseSide.value === 0) {
+      audio.side()
+      screen.value = 'exerciseSideChange'
     } else {
       audio.exdone()
+      exerciseSide.value = 0
       screen.value = 'exdone'
     }
   }
@@ -226,6 +255,7 @@ export function useSession() {
   }
 
   function handleNext() {
+    exerciseSide.value = 0
     if (exerciseIndex.value < session.value.length - 1) {
       exerciseIndex.value++
       setNumber.value = 1
@@ -257,6 +287,7 @@ export function useSession() {
     countdownValue.value = 1
     stretchIndex.value = 0
     stretchSide.value = 0
+    exerciseSide.value = 0
     elapsed.value = ''
     savedState.value = null
     screen.value = 'home'
@@ -264,8 +295,7 @@ export function useSession() {
 
   function startStretch() {
     stretchSide.value = 0
-    audio.next()
-    screen.value = 'stretch'
+    screen.value = 'stretchCountdown'
   }
 
   function skipStretch() {
@@ -273,7 +303,7 @@ export function useSession() {
     if (stretchIndex.value < resolvedStretches.value.length - 1) {
       stretchIndex.value++
       stretchSide.value = 0
-      screen.value = 'stretchIntro'
+      screen.value = 'stretchCountdown'
     } else {
       finishSession()
     }
@@ -293,11 +323,7 @@ export function useSession() {
   function handleNextSide() {
     stretchTimer.stop()
     audio.side()
-    stretchSide.value = 1
-    stretchTimer.start(currentStretch.value.duration!, () => {
-      audio.exdone()
-      advanceStretch()
-    })
+    screen.value = 'stretchSideChange'
   }
 
   return {
@@ -308,6 +334,7 @@ export function useSession() {
     countdownValue,
     stretchIndex,
     stretchSide,
+    exerciseSide,
     elapsed,
     currentExercise,
     currentStretch,

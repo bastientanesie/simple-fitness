@@ -1,12 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { type Exercise } from '../../data/exercises'
 
 const props = defineProps<{
+  title: string
   countdownValue: number
-  exercise?: Exercise
-  setNumber?: number
-  stretchName?: string
 }>()
 
 const isGo = computed(() => props.countdownValue > 5)
@@ -16,9 +13,9 @@ const displayValue = computed(() => 6 - props.countdownValue)
 <template>
   <div style="min-height: 100vh; background: var(--bg); color: var(--fg); font-family: 'IBM Plex Mono', monospace; max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 12px;">
     <div style="font-size: 10px; color: var(--subtle); letter-spacing: 0.15em; text-transform: uppercase;">
-      <template v-if="stretchName">{{ stretchName }}</template>
-      <template v-else-if="exercise && setNumber !== undefined">{{ exercise.name }} · Série {{ setNumber }}/{{ exercise.sets }}</template>
+      changez de côté
     </div>
+    <div style="font-size: 14px; color: var(--muted); margin-bottom: 4px;">{{ title }}</div>
     <div
       :key="countdownValue"
       class="pop"

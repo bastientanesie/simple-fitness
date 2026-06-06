@@ -14,6 +14,7 @@ export interface Exercise {
   gear: string | null
   pos: string
   cue: string
+  sides?: true
 }
 
 export const CAT_LABELS: Record<ExerciseCategory, string> = {
@@ -58,8 +59,9 @@ export const exercises: Exercise[] = [
   {
     id: 'clam', category: 'legs', name: 'Clamshell', emoji: '🦪', tc: '#60a5fa',
     target: 'Genoux · Hanches', sets: 2, reps: '12 reps / côté', rest: 45, gear: 'élastique',
+    sides: true,
     pos: 'Couché sur le côté — élastique au-dessus des genoux, hanches fléchies ~45°, genoux pliés',
-    cue: "Ouvre le genou du dessus vers le plafond comme une moule. Pieds collés. Résiste à l'élastique à la fermeture — ne laisse pas claquer. N'oublie pas les 2 côtés.",
+    cue: "Ouvre le genou du dessus vers le plafond comme une moule. Pieds collés. Résiste à l'élastique à la fermeture — ne laisse pas claquer.",
   },
   // DOS
   {

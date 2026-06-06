@@ -66,6 +66,17 @@ function adjustExerciseRest(id: string, delta: number) {
   }
 }
 
+function adjustExerciseDuration(id: string, delta: number) {
+  const current = config.value.exercises[id]
+  if (!current || current.duration === undefined) return
+  const next = current.duration + delta
+  if (next < 10 || next > 120) return
+  config.value = {
+    ...config.value,
+    exercises: { ...config.value.exercises, [id]: { ...current, duration: next } },
+  }
+}
+
 function moveStretch(index: number, direction: -1 | 1) {
   const arr = [...config.value.stretches]
   const target = index + direction
@@ -234,6 +245,13 @@ function confirmReset() {
                 <button @click="adjustExerciseRest(ex.id, -5)" style="width: 24px; height: 24px; border-radius: 5px; border: 1px solid var(--ghost-border); background: transparent; color: var(--fg); cursor: pointer; font-size: 14px;">−</button>
                 <span style="font-size: 13px; min-width: 24px; text-align: center;">{{ config.exercises[ex.id]?.rest }}s</span>
                 <button @click="adjustExerciseRest(ex.id, 5)" style="width: 24px; height: 24px; border-radius: 5px; border: 1px solid var(--ghost-border); background: transparent; color: var(--fg); cursor: pointer; font-size: 14px;">+</button>
+              </div>
+              <!-- Durée stepper (exercices timed uniquement) -->
+              <div v-if="ex.duration !== undefined" style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 11px; color: var(--muted);">Durée</span>
+                <button @click="adjustExerciseDuration(ex.id, -5)" style="width: 24px; height: 24px; border-radius: 5px; border: 1px solid var(--ghost-border); background: transparent; color: var(--fg); cursor: pointer; font-size: 14px;">−</button>
+                <span style="font-size: 13px; min-width: 28px; text-align: center;">{{ config.exercises[ex.id]?.duration }}s</span>
+                <button @click="adjustExerciseDuration(ex.id, 5)" style="width: 24px; height: 24px; border-radius: 5px; border: 1px solid var(--ghost-border); background: transparent; color: var(--fg); cursor: pointer; font-size: 14px;">+</button>
               </div>
             </div>
           </div>

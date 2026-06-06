@@ -13,6 +13,7 @@ import RestScreen         from '../components/screens/RestScreen.vue'
 import ExDoneScreen       from '../components/screens/ExDoneScreen.vue'
 import StretchIntroScreen from '../components/screens/StretchIntroScreen.vue'
 import StretchScreen      from '../components/screens/StretchScreen.vue'
+import SideChangeScreen   from '../components/screens/SideChangeScreen.vue'
 import DoneScreen         from '../components/screens/DoneScreen.vue'
 
 const s = useSession()
@@ -45,6 +46,24 @@ watch(s.screen, () => window.scrollTo(0, 0))
     :set-number="s.setNumber.value"
   />
 
+  <CountdownScreen
+    v-else-if="s.screen.value === 'stretchCountdown'"
+    :countdown-value="s.countdownValue.value"
+    :stretch-name="s.currentStretch.value?.name"
+  />
+
+  <SideChangeScreen
+    v-else-if="s.screen.value === 'stretchSideChange'"
+    :title="s.currentStretch.value?.name ?? ''"
+    :countdown-value="s.countdownValue.value"
+  />
+
+  <SideChangeScreen
+    v-else-if="s.screen.value === 'exerciseSideChange'"
+    :title="s.currentExercise.value?.name ?? ''"
+    :countdown-value="s.countdownValue.value"
+  />
+
   <ActiveScreen
     v-else-if="s.screen.value === 'active'"
     :exercise="s.currentExercise.value"
@@ -53,6 +72,7 @@ watch(s.screen, () => window.scrollTo(0, 0))
     :set-number="s.setNumber.value"
     :ex-timer-value="s.exTimer.value.value"
     :ex-timer-max="s.exTimer.max.value"
+    :exercise-side="s.exerciseSide.value"
     @ok="s.handleOk()"
   />
 
