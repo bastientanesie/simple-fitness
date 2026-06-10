@@ -60,6 +60,11 @@ function mergeConfig(saved: ProgramConfig): ProgramConfig {
           ...(e.duration !== undefined ? { duration: e.duration } : {}),
         },
       }
+    } else if (e.duration !== undefined && merged.exercises[e.id].duration === undefined) {
+      merged.exercises = {
+        ...merged.exercises,
+        [e.id]: { ...merged.exercises[e.id], duration: e.duration },
+      }
     }
   }
 
