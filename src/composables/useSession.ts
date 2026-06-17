@@ -179,6 +179,7 @@ export function useSession() {
           if (setNumber.value < ex.sets) {
             audio.next()
             restTimer.start(ex.rest, () => {
+              audio.restEnd()
               setNumber.value++
               screen.value = 'countdown'
             })
@@ -232,6 +233,7 @@ export function useSession() {
     if (setNumber.value < ex.sets) {
       audio.next()
       restTimer.start(ex.rest, () => {
+        audio.restEnd()
         setNumber.value++
         screen.value = 'countdown'
       })
