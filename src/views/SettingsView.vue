@@ -118,6 +118,12 @@ function adjustStretchReps(id: string, delta: number) {
   }
 }
 
+function adjustSideChangeDuration(delta: number) {
+  const next = config.value.sideChangeDuration + delta
+  if (next < 5 || next > 30) return
+  config.value = { ...config.value, sideChangeDuration: next }
+}
+
 const showResetConfirm = ref(false)
 
 function confirmReset() {
@@ -261,6 +267,15 @@ function confirmReset() {
       <!-- 5.3 Étirements -->
       <div style="margin-bottom: 40px;">
         <div style="font-size: 10px; color: var(--muted); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 16px;">Étirements</div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--ghost-border);">
+          <span style="font-size: 13px;">Changement de côté</span>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button @click="adjustSideChangeDuration(-5)" style="width: 24px; height: 24px; border-radius: 5px; border: 1px solid var(--ghost-border); background: transparent; color: var(--fg); cursor: pointer; font-size: 14px;">−</button>
+            <span style="font-size: 13px; min-width: 28px; text-align: center;">{{ config.sideChangeDuration }}s</span>
+            <button @click="adjustSideChangeDuration(5)" style="width: 24px; height: 24px; border-radius: 5px; border: 1px solid var(--ghost-border); background: transparent; color: var(--fg); cursor: pointer; font-size: 14px;">+</button>
+          </div>
+        </div>
 
         <div
           v-for="(entry, index) in config.stretches"
