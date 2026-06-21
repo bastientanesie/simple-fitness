@@ -96,6 +96,19 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
+function avoidConsecutiveCategories(list: Exercise[]): Exercise[] {
+  const result: Exercise[] = []
+  const remaining = [...list]
+
+  while (remaining.length > 0) {
+    const lastCategory = result.length > 0 ? result[result.length - 1].category : null
+    const idx = remaining.findIndex(e => e.category !== lastCategory)
+    result.push(...remaining.splice(idx === -1 ? 0 : idx, 1))
+  }
+
+  return result
+}
+
 export function useProgram() {
   const config = useLocalStorage<ProgramConfig>('program-config', makeDefault(), {
     serializer: {
@@ -150,7 +163,7 @@ export function useProgram() {
       })))
     }
 
-    return shuffle(selected)
+    return avoidConsecutiveCategories(shuffle(selected))
   }
 
   function resetToDefault() {
