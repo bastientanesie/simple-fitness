@@ -140,7 +140,8 @@ export function useSession() {
       return
     }
     if (cdTimeout) { clearTimeout(cdTimeout); cdTimeout = null }
-    if (cdv <= 5) {
+    const threshold = s === 'stretchSideChange' ? config.value.sideChangeDuration : 5
+    if (cdv <= threshold) {
       audio.tick()
       cdTimeout = setTimeout(() => { countdownValue.value++ }, 800)
     } else {

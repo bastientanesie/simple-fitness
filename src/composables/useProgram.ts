@@ -21,6 +21,7 @@ export interface ProgramConfig {
   categoryQuotas: Record<ExerciseCategory, number>
   exercises: Record<string, ExerciseOverride>
   stretches: StretchEntry[]
+  sideChangeDuration: number
 }
 
 function makeDefault(): ProgramConfig {
@@ -39,14 +40,15 @@ function makeDefault(): ProgramConfig {
       enabled: true,
       ...(s.duration !== null ? { duration: s.duration } : { reps: (s as { reps: number }).reps }),
     })),
+    sideChangeDuration: 10,
   }
 }
 
-function mergeConfig(saved: ProgramConfig): ProgramConfig {
+function mergeConfig(saved: Partial<ProgramConfig>): ProgramConfig {
   if (!saved?.exercises || !saved?.stretches || !saved?.categoryQuotas) {
     return makeDefault()
   }
-  const merged = { ...saved }
+  const merged = { ...makeDefault(), ...saved }
 
   // Add exercises present in pool but absent from saved config
   for (const e of exercises) {
