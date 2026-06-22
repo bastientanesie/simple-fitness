@@ -1,4 +1,4 @@
-export type ExerciseCategory = 'legs' | 'back' | 'core' | 'shoulders'
+export type ExerciseCategory = 'legs' | 'hips' | 'back' | 'core' | 'shoulders'
 
 export interface Exercise {
   id: string
@@ -19,6 +19,7 @@ export interface Exercise {
 
 export const CAT_LABELS: Record<ExerciseCategory, string> = {
   legs: 'Jambes',
+  hips: 'Hanches',
   back: 'Dos',
   core: 'Gainage',
   shoulders: 'Épaules',
@@ -63,6 +64,31 @@ export const exercises: Exercise[] = [
     pos: 'Couché sur le côté — élastique au-dessus des genoux, hanches fléchies ~45°, genoux pliés',
     cue: "Ouvre le genou du dessus vers le plafond comme une moule. Pieds collés. Résiste à l'élastique à la fermeture — ne laisse pas claquer.",
   },
+  {
+    id: 'squat-jump', category: 'legs', name: 'Squat sauté', emoji: '⚡', tc: '#60a5fa',
+    target: 'Jambes · Cardio', sets: 3, reps: '10 reps', rest: 45, gear: null,
+    pos: 'Debout, pieds écartés largeur épaules',
+    cue: "Descends en squat, puis pousse explosivement pour décoller du sol. Réception souple sur les avant-pieds, genoux légèrement fléchis à l'atterrissage. Enchaîne directement.",
+  },
+  // HANCHES
+  {
+    id: 'fire-hydrant', category: 'hips', name: 'Fire Hydrant', emoji: '🐕', tc: '#fb923c',
+    target: 'Hanches · Fessier profond', sets: 3, reps: '10 reps / côté', rest: 30, gear: null,
+    pos: 'À 4 pattes — poignets sous épaules, genoux sous hanches',
+    cue: "Ouvre le genou latéralement vers le plafond en gardant la jambe fléchie à 90°. Bassin immobile — toute la rotation vient de la hanche. Reviens lentement. Change de côté.",
+  },
+  {
+    id: 'hip-9090', category: 'hips', name: 'Hip 90/90', emoji: '🧘', tc: '#fb923c',
+    target: 'Hanches · Mobilité', sets: 2, reps: '8 reps / côté', rest: 30, gear: null,
+    pos: 'Assis au sol — jambe avant fléchie à 90° devant toi, jambe arrière fléchie à 90° sur le côté (tibia parallèle au tronc). Mains au sol pour l\'équilibre.',
+    cue: "Bascule lentement le poids d'un côté à l'autre en passant par le centre. Le genou avant passe devant, le genou arrière part derrière. Tu dois sentir l'étirement dans les rotateurs de hanche. Pas de douleur articulaire.",
+  },
+  {
+    id: 'band-walk', category: 'hips', name: 'Lateral Band Walk', emoji: '🦀', tc: '#fb923c',
+    target: 'Hanches · Genoux', sets: 2, reps: '10 pas / côté', rest: 30, gear: 'élastique',
+    pos: 'Debout — élastique au-dessus des genoux, pieds écartés largeur hanches, légère flexion de genoux',
+    cue: "Fais 10 pas latéraux vers la droite, puis 10 vers la gauche. Garde les pieds parallèles, ne laisse pas les genoux rentrer vers l'intérieur. Résiste à l'élastique à chaque pas.",
+  },
   // DOS
   {
     id: 'catcow', category: 'back', name: 'Cat-Cow', emoji: '🐈', tc: '#4ade80',
@@ -94,6 +120,12 @@ export const exercises: Exercise[] = [
     target: 'Gainage · Dos', sets: 3, reps: '8 reps / côté', rest: 45, gear: null,
     pos: "Sur le dos, bras tendus vers le plafond, genoux fléchis à 90° en l'air",
     cue: "Descends simultanément le bras droit et la jambe gauche vers le sol sans les poser. Dos plaqué au sol. Reviens, change de côté. Lent et contrôlé.",
+  },
+  {
+    id: 'mountain-climber', category: 'core', name: 'Mountain Climber', emoji: '🧗', tc: '#a78bfa',
+    target: 'Gainage · Cardio', sets: 3, reps: '20 s', duration: 20, rest: 45, gear: null,
+    pos: 'Position de pompe — bras tendus, mains sous les épaules, corps en planche',
+    cue: "Ramène les genoux vers la poitrine en alternance, le plus rapidement possible sans creuser le dos. Respire régulièrement. Si 20s devient facile, vise 30s.",
   },
   // ÉPAULES / POSTURE
   {

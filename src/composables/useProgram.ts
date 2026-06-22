@@ -26,7 +26,7 @@ export interface ProgramConfig {
 
 function makeDefault(): ProgramConfig {
   return {
-    categoryQuotas: { legs: 2, back: 1, core: 1, shoulders: 1 },
+    categoryQuotas: { legs: 2, hips: 1, back: 1, core: 1, shoulders: 1 },
     exercises: Object.fromEntries(
       exercises.map(e => [e.id, {
         enabled: true,
@@ -48,7 +48,15 @@ function mergeConfig(saved: Partial<ProgramConfig>): ProgramConfig {
   if (!saved?.exercises || !saved?.stretches || !saved?.categoryQuotas) {
     return makeDefault()
   }
-  const merged = { ...makeDefault(), ...saved }
+  const defaults = makeDefault()
+  const merged = { ...defaults, ...saved }
+
+  // Add category quotas present in defaults but absent from saved config
+  for (const cat of Object.keys(defaults.categoryQuotas) as ExerciseCategory[]) {
+    if (merged.categoryQuotas[cat] === undefined) {
+      merged.categoryQuotas = { ...merged.categoryQuotas, [cat]: defaults.categoryQuotas[cat] }
+    }
+  }
 
   // Add exercises present in pool but absent from saved config
   for (const e of exercises) {
@@ -140,7 +148,7 @@ export function useProgram() {
   )
 
   function buildSession(lastIds: string[]): Exercise[] {
-    const categories: ExerciseCategory[] = ['legs', 'back', 'core', 'shoulders']
+    const categories: ExerciseCategory[] = ['legs', 'hips', 'back', 'core', 'shoulders']
     const selected: Exercise[] = []
 
     for (const cat of categories) {
