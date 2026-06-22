@@ -2,6 +2,7 @@ import { computed } from 'vue'
 import { useLocalStorage } from '@vueuse/core'
 import { exercises, type Exercise, type ExerciseCategory } from '../data/exercises'
 import { stretches, type Stretch } from '../data/stretches'
+import { warmups, type Warmup } from '../data/warmups'
 
 export interface ExerciseOverride {
   enabled: boolean
@@ -17,10 +18,17 @@ export interface StretchEntry {
   reps?: number
 }
 
+export interface WarmupEntry {
+  id: string
+  enabled: boolean
+  duration: number
+}
+
 export interface ProgramConfig {
   categoryQuotas: Record<ExerciseCategory, number>
   exercises: Record<string, ExerciseOverride>
   stretches: StretchEntry[]
+  warmups: WarmupEntry[]
   sideChangeDuration: number
 }
 
@@ -40,12 +48,17 @@ function makeDefault(): ProgramConfig {
       enabled: true,
       ...(s.duration !== null ? { duration: s.duration } : { reps: (s as { reps: number }).reps }),
     })),
+    warmups: warmups.map(w => ({
+      id: w.id,
+      enabled: true,
+      duration: w.duration,
+    })),
     sideChangeDuration: 10,
   }
 }
 
 function mergeConfig(saved: Partial<ProgramConfig>): ProgramConfig {
-  if (!saved?.exercises || !saved?.stretches || !saved?.categoryQuotas) {
+  if (!saved?.exercises || !saved?.stretches || !saved?.categoryQuotas || !saved?.warmups) {
     return makeDefault()
   }
   const merged = { ...makeDefault(), ...saved }
@@ -84,6 +97,17 @@ function mergeConfig(saved: Partial<ProgramConfig>): ProgramConfig {
   }
   if (newStretches.length > 0) {
     merged.stretches = [...merged.stretches, ...newStretches]
+  }
+
+  const savedWarmupIds = new Set(merged.warmups.map(w => w.id))
+  const newWarmups: WarmupEntry[] = []
+  for (const w of warmups) {
+    if (!savedWarmupIds.has(w.id)) {
+      newWarmups.push({ id: w.id, enabled: true, duration: w.duration })
+    }
+  }
+  if (newWarmups.length > 0) {
+    merged.warmups = [...merged.warmups, ...newWarmups]
   }
 
   return merged
@@ -139,6 +163,17 @@ export function useProgram() {
       .filter((s): s is Stretch => s !== null)
   )
 
+  const enabledWarmups = computed<(Warmup & { duration: number })[]>(() =>
+    config.value.warmups
+      .filter(entry => entry.enabled)
+      .map(entry => {
+        const base = warmups.find(w => w.id === entry.id)
+        if (!base) return null
+        return { ...base, duration: entry.duration }
+      })
+      .filter((w): w is Warmup & { duration: number } => w !== null)
+  )
+
   function buildSession(lastIds: string[]): Exercise[] {
     const categories: ExerciseCategory[] = ['legs', 'back', 'core', 'shoulders']
     const selected: Exercise[] = []
@@ -172,5 +207,5 @@ export function useProgram() {
     config.value = makeDefault()
   }
 
-  return { config, resolvedStretches, buildSession, resetToDefault }
+  return { config, resolvedStretches, enabledWarmups, buildSession, resetToDefault }
 }

@@ -15,6 +15,8 @@ import StretchIntroScreen from '../components/screens/StretchIntroScreen.vue'
 import StretchScreen      from '../components/screens/StretchScreen.vue'
 import SideChangeScreen   from '../components/screens/SideChangeScreen.vue'
 import DoneScreen         from '../components/screens/DoneScreen.vue'
+import WarmupIntroScreen  from '../components/screens/WarmupIntroScreen.vue'
+import WarmupActiveScreen from '../components/screens/WarmupActiveScreen.vue'
 
 const s = useSession()
 
@@ -26,9 +28,32 @@ watch(s.screen, () => window.scrollTo(0, 0))
     v-if="s.screen.value === 'home'"
     :session="s.session.value"
     :pool-size="exercises.length"
+    :warmups="s.enabledWarmups.value"
+    :selected-warmup-id="s.selectedWarmupId.value"
     @commencer="s.handleBegin()"
     @regen="s.handleRegen()"
     @open-settings="emit('open-settings')"
+    @select-warmup="s.selectedWarmupId.value = $event"
+  />
+
+  <WarmupIntroScreen
+    v-else-if="s.screen.value === 'warmupIntro' && s.currentWarmup.value"
+    :warmup="s.currentWarmup.value"
+    @start="s.handleWarmupStart()"
+  />
+
+  <CountdownScreen
+    v-else-if="s.screen.value === 'warmupCountdown'"
+    :countdown-value="s.countdownValue.value"
+    :stretch-name="s.currentWarmup.value?.name"
+  />
+
+  <WarmupActiveScreen
+    v-else-if="s.screen.value === 'warmupActive' && s.currentWarmup.value"
+    :warmup="s.currentWarmup.value"
+    :timer-value="s.warmupTimer.value.value"
+    :timer-max="s.warmupTimer.max.value"
+    @skip="s.handleWarmupSkip()"
   />
 
   <IntroScreen

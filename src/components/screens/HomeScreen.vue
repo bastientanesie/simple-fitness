@@ -1,16 +1,25 @@
 <script setup lang="ts">
 import { type Exercise, CAT_LABELS } from '../../data/exercises'
+import { type Warmup } from '../../data/warmups'
 
 defineProps<{
   session: Exercise[]
   poolSize: number
+  warmups: (Warmup & { duration: number })[]
+  selectedWarmupId: string
 }>()
 
 defineEmits<{
   commencer: []
   regen: []
   'open-settings': []
+  'select-warmup': [id: string]
 }>()
+
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  return `${m} min`
+}
 </script>
 
 <template>
@@ -33,14 +42,37 @@ defineEmits<{
         >⚙</button>
       </div>
 
-      <!-- Warmup card -->
-      <div style="background: var(--warmup-bg); border: 1px solid var(--warmup-border); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px;">
-        <span style="font-size: 24px;">🚴</span>
-        <div style="flex: 1;">
-          <div style="font-weight: 600; font-size: 13px; margin-bottom: 2px;">Échauffement d'abord</div>
-          <div style="font-size: 11px; color: var(--muted);">Vélo d'appart · résistance minimale · 5 min</div>
-        </div>
-        <span style="font-size: 13px; color: #f0a500; font-weight: 600;">↓</span>
+      <!-- Warmup selection -->
+      <div style="font-size: 10px; color: var(--muted); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 8px;">
+        Échauffement
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px;">
+        <button
+          v-for="w in warmups"
+          :key="w.id"
+          @click="$emit('select-warmup', w.id)"
+          :style="{
+            background: 'var(--warmup-bg)',
+            border: w.id === selectedWarmupId ? '2px solid #f0a500' : '1px solid var(--warmup-border)',
+            borderRadius: '12px',
+            padding: w.id === selectedWarmupId ? '13px 15px' : '14px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            cursor: 'pointer',
+            textAlign: 'left',
+            color: 'var(--fg)',
+            fontFamily: '\'IBM Plex Mono\', monospace',
+            width: '100%',
+          }"
+        >
+          <span style="font-size: 22px; flex-shrink: 0;">{{ w.emoji }}</span>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-weight: 600; font-size: 13px; margin-bottom: 2px;">{{ w.name }}</div>
+            <div style="font-size: 11px; color: var(--muted);">{{ w.description }} · {{ formatDuration(w.duration) }}</div>
+          </div>
+          <span v-if="w.id === selectedWarmupId" style="font-size: 13px; color: #f0a500; font-weight: 600;">✓</span>
+        </button>
       </div>
 
       <!-- Session header -->
