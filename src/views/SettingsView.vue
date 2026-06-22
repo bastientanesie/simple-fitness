@@ -4,6 +4,7 @@ import { useTheme } from '../composables/useTheme'
 import { useProgram } from '../composables/useProgram'
 import { exercises, CAT_LABELS, type ExerciseCategory } from '../data/exercises'
 import { stretches } from '../data/stretches'
+import { warmups } from '../data/warmups'
 
 defineEmits<{ back: [] }>()
 
@@ -124,6 +125,27 @@ function adjustSideChangeDuration(delta: number) {
   config.value = { ...config.value, sideChangeDuration: next }
 }
 
+function toggleWarmup(id: string) {
+  config.value = {
+    ...config.value,
+    warmups: config.value.warmups.map(w =>
+      w.id === id ? { ...w, enabled: !w.enabled } : w
+    ),
+  }
+}
+
+function adjustWarmupDuration(id: string, delta: number) {
+  config.value = {
+    ...config.value,
+    warmups: config.value.warmups.map(w => {
+      if (w.id !== id) return w
+      const next = w.duration + delta
+      if (next < 60 || next > 600) return w
+      return { ...w, duration: next }
+    }),
+  }
+}
+
 const showResetConfirm = ref(false)
 
 function confirmReset() {
@@ -202,7 +224,47 @@ function confirmReset() {
         </div>
       </div>
 
-      <!-- 5.2 Exercices -->
+      <!-- 5.2 Échauffements -->
+      <div style="margin-bottom: 40px;">
+        <div style="font-size: 10px; color: var(--muted); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 16px;">Échauffements</div>
+
+        <div
+          v-for="entry in config.warmups"
+          :key="entry.id"
+          style="margin-bottom: 8px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--ghost-border);"
+          :style="{ opacity: entry.enabled ? 1 : 0.45 }"
+        >
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span>{{ warmups.find(w => w.id === entry.id)?.emoji }}</span>
+              <span style="font-size: 13px;">{{ warmups.find(w => w.id === entry.id)?.name }}</span>
+            </div>
+            <button
+              @click="toggleWarmup(entry.id)"
+              :style="{
+                width: '40px', height: '22px', borderRadius: '11px', border: 'none', cursor: 'pointer',
+                background: entry.enabled ? 'var(--fg)' : 'var(--ghost-border)',
+                position: 'relative', transition: 'background 0.2s',
+              }"
+            >
+              <span :style="{
+                position: 'absolute', top: '3px', width: '16px', height: '16px',
+                borderRadius: '50%', background: 'var(--bg)', transition: 'left 0.2s',
+                left: entry.enabled ? '21px' : '3px',
+              }"></span>
+            </button>
+          </div>
+
+          <div v-if="entry.enabled" style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 11px; color: var(--muted);">Durée</span>
+            <button @click="adjustWarmupDuration(entry.id, -60)" style="width: 24px; height: 24px; border-radius: 5px; border: 1px solid var(--ghost-border); background: transparent; color: var(--fg); cursor: pointer; font-size: 14px;">−</button>
+            <span style="font-size: 13px; min-width: 36px; text-align: center;">{{ Math.floor(entry.duration / 60) }} min</span>
+            <button @click="adjustWarmupDuration(entry.id, 60)" style="width: 24px; height: 24px; border-radius: 5px; border: 1px solid var(--ghost-border); background: transparent; color: var(--fg); cursor: pointer; font-size: 14px;">+</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5.3 Exercices -->
       <div style="margin-bottom: 40px;">
         <div style="font-size: 10px; color: var(--muted); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 16px;">Exercices</div>
 

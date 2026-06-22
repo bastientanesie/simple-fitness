@@ -1,6 +1,7 @@
 import { ref, computed, watch } from 'vue'
 import { useLocalStorage, useWakeLock } from '@vueuse/core'
 import { exercises, type Exercise } from '../data/exercises'
+import { warmups } from '../data/warmups'
 import { useTimer } from './useTimer'
 import { useAudio } from './useAudio'
 import { useProgram } from './useProgram'
@@ -9,6 +10,7 @@ export type ScreenName =
   | 'home' | 'intro' | 'countdown' | 'active'
   | 'rest' | 'exdone' | 'stretchIntro' | 'stretch' | 'done'
   | 'stretchCountdown' | 'stretchSideChange' | 'exerciseSideChange'
+  | 'warmupIntro' | 'warmupCountdown' | 'warmupActive'
 
 interface PersistedState {
   sessionIds: string[]
@@ -24,15 +26,18 @@ function snapScreen(s: ScreenName): ScreenName {
   if (s === 'countdown' || s === 'active' || s === 'rest') return 'intro'
   if (s === 'exerciseSideChange') return 'intro'
   if (s === 'stretch' || s === 'stretchCountdown' || s === 'stretchSideChange') return 'stretchIntro'
+  if (s === 'warmupCountdown' || s === 'warmupActive') return 'warmupIntro'
   return s
 }
 
 export function useSession() {
   const audio = useAudio()
-  const { config, buildSession, resolvedStretches } = useProgram()
+  const { config, buildSession, resolvedStretches, enabledWarmups } = useProgram()
+  const selectedWarmupId = useLocalStorage<string>('selected-warmup-id', 'bike')
   const exTimer      = useTimer()
   const restTimer    = useTimer()
   const stretchTimer = useTimer()
+  const warmupTimer  = useTimer()
   const { request: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
 
   const lastSessionIds = useLocalStorage<string[]>('last-session-ids', [])
@@ -78,6 +83,13 @@ export function useSession() {
   const currentStretch = computed(() =>
     resolvedStretches.value[Math.min(stretchIndex.value, resolvedStretches.value.length - 1)]
   )
+  const currentWarmup = computed(() => {
+    const entry = config.value.warmups.find(w => w.id === selectedWarmupId.value && w.enabled)
+    if (!entry) return null
+    const base = warmups.find(w => w.id === entry.id)
+    if (!base) return null
+    return { ...base, duration: entry.duration }
+  })
 
   function persist() {
     if (screen.value === 'home' || screen.value === 'done') {
@@ -131,7 +143,7 @@ export function useSession() {
   })
 
   // ── Countdown watch ──────────────────────────────────────────────────────
-  const countdownScreens: ScreenName[] = ['countdown', 'stretchCountdown', 'stretchSideChange', 'exerciseSideChange']
+  const countdownScreens: ScreenName[] = ['countdown', 'stretchCountdown', 'stretchSideChange', 'exerciseSideChange', 'warmupCountdown']
   let cdTimeout: ReturnType<typeof setTimeout> | null = null
 
   watch([screen, countdownValue], ([s, cdv]) => {
@@ -161,6 +173,8 @@ export function useSession() {
           setNumber.value = 1
           screen.value = 'countdown'
         }, 650)
+      } else if (s === 'warmupCountdown') {
+        cdTimeout = setTimeout(() => { screen.value = 'warmupActive' }, 650)
       }
     }
   })
@@ -197,6 +211,16 @@ export function useSession() {
       }
     }
 
+    if (s === 'warmupActive') {
+      const w = currentWarmup.value
+      if (w) {
+        warmupTimer.start(w.duration, () => {
+          audio.exdone()
+          screen.value = 'intro'
+        })
+      }
+    }
+
     if (s === 'stretch') {
       const st = currentStretch.value
       if (st.duration !== null) {
@@ -220,6 +244,16 @@ export function useSession() {
     startTime = Date.now()
     exerciseIndex.value = 0
     setNumber.value = 1
+    screen.value = currentWarmup.value ? 'warmupIntro' : 'intro'
+  }
+
+  function handleWarmupStart() {
+    countdownValue.value = 1
+    screen.value = 'warmupCountdown'
+  }
+
+  function handleWarmupSkip() {
+    warmupTimer.stop()
     screen.value = 'intro'
   }
 
@@ -283,6 +317,7 @@ export function useSession() {
     exTimer.stop()
     restTimer.stop()
     stretchTimer.stop()
+    warmupTimer.stop()
     if (cdTimeout) { clearTimeout(cdTimeout); cdTimeout = null }
     session.value = buildSession(lastSessionIds.value)
     exerciseIndex.value = 0
@@ -341,10 +376,16 @@ export function useSession() {
     elapsed,
     currentExercise,
     currentStretch,
+    enabledWarmups,
+    selectedWarmupId,
+    currentWarmup,
     exTimer,
     restTimer,
     stretchTimer,
+    warmupTimer,
     handleBegin,
+    handleWarmupStart,
+    handleWarmupSkip,
     handleStart,
     handleOk,
     handleSkipRest,
